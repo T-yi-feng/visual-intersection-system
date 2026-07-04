@@ -1,0 +1,112 @@
+<mxfile host="app.diagrams.net" agent="Claude">
+  <diagram id="sys-arch" name="系统结构图">
+    <mxGraphModel dx="949" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1;fontColor=#333333;" value="图1  视觉识别交叉口信息采集系统结构图" vertex="1">
+          <mxGeometry height="40" width="340" x="390" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="layer4_bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;dashed=0;arcSize=8;fontSize=18;" value="" vertex="1">
+          <mxGeometry height="130" width="960" x="80" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="layer4_label" parent="1" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1;fontColor=#2E7D32;" value="展示层（Visualization）" vertex="1">
+          <mxGeometry height="40" width="210" x="90" y="75" as="geometry" />
+        </mxCell>
+        <mxCell id="viz1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#66BB6A;fontSize=18;" value="BEV车辆框着色" vertex="1">
+          <mxGeometry height="40" width="140" x="100" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="viz2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#66BB6A;fontSize=18;" value="拥堵热力图叠加" vertex="1">
+          <mxGeometry height="40" width="140" x="260" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="viz3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#66BB6A;fontSize=18;" value="Phi时间线图表" vertex="1">
+          <mxGeometry height="40" width="140" x="420" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="viz4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#66BB6A;fontSize=18;" value="Web控制台界面" vertex="1">
+          <mxGeometry height="40" width="140" x="580" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="viz5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#66BB6A;fontSize=18;" value="事件报告导出" vertex="1">
+          <mxGeometry height="40" width="140" x="740" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="viz6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#66BB6A;fontSize=18;" value="异步图像写入" vertex="1">
+          <mxGeometry height="40" width="120" x="900" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="layer3_bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1E88E5;strokeWidth=2;dashed=0;arcSize=8;fontSize=18;" value="" vertex="1">
+          <mxGeometry height="130" width="960" x="80" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="layer3_label" parent="1" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1;fontColor=#1565C0;" value="分析层（Analysis）" vertex="1">
+          <mxGeometry height="40" width="180" x="90" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="ana1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#42A5F5;fontSize=18;" value="运动状态分析&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;移动 / 静止 / 停放&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="170" x="100" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="ana2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#42A5F5;fontSize=18;fontStyle=1;" value="卷积冲突检测&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;方向场卷积 + 冲突对匹配&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="200" x="290" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="ana3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#42A5F5;fontSize=18;" value="拥堵归因分析&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;影响力场 + 单车评分&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="180" x="510" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="ana4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#42A5F5;fontSize=18;" value="消融实验&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;逐级移除 + 效果验证&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="710" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="ana5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#42A5F5;fontSize=18;fontStyle=1;" value="Phi&lt;br&gt;拥堵指数" vertex="1">
+          <mxGeometry height="50" width="120" x="890" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="layer2_bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FB8C00;strokeWidth=2;dashed=0;arcSize=8;fontSize=18;" value="" vertex="1">
+          <mxGeometry height="130" width="960" x="80" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="layer2_label" parent="1" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1;fontColor=#E65100;" value="感知层（Perception）" vertex="1">
+          <mxGeometry height="40" width="200" x="90" y="375" as="geometry" />
+        </mxCell>
+        <mxCell id="perc1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#FFA726;fontSize=18;" value="视频输入&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;斜视监控摄像头&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="170" x="100" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="perc2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#FFA726;fontSize=18;fontStyle=1;" value="YOLO11m 车辆检测&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;多类别识别 + 置信度过滤&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="210" x="290" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="perc3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#FFA726;fontSize=18;" value="ByteTrack 多目标追踪&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;轨迹关联 + 标签稳定化&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="210" x="520" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="perc4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#FFA726;fontSize=18;" value="鸟瞰图变换&lt;br&gt;&lt;font style=&quot;color: rgb(102, 102, 102);&quot;&gt;单应性矩阵 + BEV映射&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="190" x="750" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="layer1_bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#8E24AA;strokeWidth=2;dashed=0;arcSize=8;fontSize=18;" value="" vertex="1">
+          <mxGeometry height="100" width="960" x="80" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="layer1_label" parent="1" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1;fontColor=#6A1B9A;" value="数据层（Data）" vertex="1">
+          <mxGeometry height="40" width="150" x="90" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="data1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#AB47BC;fontSize=18;" value="路口配置" vertex="1">
+          <mxGeometry height="35" width="120" x="100" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="data2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#AB47BC;fontSize=18;" value="单应性标定" vertex="1">
+          <mxGeometry height="35" width="120" x="240" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="data3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#AB47BC;fontSize=18;" value="风险参数" vertex="1">
+          <mxGeometry height="35" width="120" x="380" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="data4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#AB47BC;fontSize=18;" value="模型权重" vertex="1">
+          <mxGeometry height="35" width="120" x="520" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="data5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#AB47BC;fontSize=18;" value="ByteTrack配置" vertex="1">
+          <mxGeometry height="35" width="140" x="660" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="data6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#AB47BC;fontSize=18;" value="输出结果存储" vertex="1">
+          <mxGeometry height="35" width="140" x="820" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow_d_p" edge="1" parent="1" source="layer1_bg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#999999;endArrow=blockThin;endFill=1;fontSize=18;" target="layer2_bg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow_p_a" edge="1" parent="1" source="layer2_bg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#999999;endArrow=blockThin;endFill=1;fontSize=18;" target="layer3_bg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow_a_v" edge="1" parent="1" source="layer3_bg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#999999;endArrow=blockThin;endFill=1;fontSize=18;" target="layer4_bg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow_label" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontColor=#999999;fontStyle=2;" value="▲ 数据流向" vertex="1">
+          <mxGeometry height="40" width="120" x="1050" y="315" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,26 @@
+{
+  "car": {
+    "length_m": 4.0,
+    "width_m":1.6
+  },
+  "truck": {
+    "length_m": 10,
+    "width_m": 2.6
+  },
+  "bus": {
+    "length_m": 9.0,
+    "width_m": 2.2
+  },
+  "van": {
+    "length_m": 4.2,
+    "width_m": 1.6
+  },
+  "motorcycle": {
+    "length_m": 2.1,
+    "width_m": 0.8
+  },
+  "bicycle": {
+    "length_m": 1.6,
+    "width_m": 0.6
+  }
+}

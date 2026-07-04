@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model weights (too large for git)
+data/models/*.pt
+data/models/*.onnx
+
+# Video files (too large)
+data/videos/**/*.mp4
+data/videos/**/*.avi
+data/videos/**/*.mov
+data/videos/**/*.mkv
+data/videos/**/*.wmv
+data/videos/**/*.cmt.xml
+
+# Output files
+outputs/
+output_demo*.png
+
+# Bilibili cookies
+cookies_bilibili.txt
+
+# Pytest
+.pytest_cache/
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../Visual System-BEV鸟瞰变换"
+		},
+		{
+			"path": "../Visual System-卷积冲突检测"
+		},
+		{
+			"path": "../Visual System-拥堵指数Phi"
+		},
+		{
+			"path": "../Visual System-车辆归因分析"
+		},
+		{
+			"path": "../Visual System-运动状态分析"
+		},
+		{
+			"path": "../Visual System-检测与追踪"
+		},
+		{
+			"path": "../Visual System-完整Pipeline"
+		}
+	],
+	"settings": {}
+}

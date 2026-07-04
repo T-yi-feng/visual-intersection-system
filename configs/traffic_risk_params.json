@@ -1,0 +1,14 @@
+{
+  "N_sat": 40,
+  "v_ref": 5.0,
+  "v_free": 0.0,
+  "w_rho": 0.4,
+  "w_v": 0.6,
+  "refresh_seconds": 0.5,
+  "phi_plot_threshold": 0.70,
+  "chart_window_seconds": 120.0,
+  "paper_export_width": 2200,
+  "paper_export_height": 1400,
+  "edge_margin_ratio": 0.12,
+  "long_stationary_seconds": 30.0
+}

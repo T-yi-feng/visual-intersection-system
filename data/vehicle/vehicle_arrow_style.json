@@ -1,0 +1,32 @@
+{
+  "car": {
+    "length_scale": 3.0,
+    "alpha": 0.55,
+    "thickness": 1.5
+  },
+  "truck": {
+    "length_scale": 2.0,
+    "alpha": 0.52,
+    "thickness": 1.5
+  },
+  "bus": {
+    "length_scale": 2.0,
+    "alpha": 0.50,
+    "thickness": 1.5
+  },
+  "van": {
+    "length_scale": 2.0,
+    "alpha": 0.54,
+    "thickness": 1.5
+  },
+  "motorcycle": {
+    "length_scale": 3.0,
+    "alpha": 0.58,
+    "thickness": 1.5
+  },
+  "bicycle": {
+    "length_scale": 3.0,
+    "alpha": 0.58,
+    "thickness": 1.5
+  }
+}

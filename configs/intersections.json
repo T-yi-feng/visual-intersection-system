@@ -1,0 +1,153 @@
+{
+  "default_site": "default",
+  "sites": {
+    "default": {
+      "display_name": "Default Intersection",
+      "video_dir": "data/videos/default",
+      "calibration_image": "data/calibration/default/image_000.png",
+      "homography": "configs/homography_points_example.json",
+      "risk_params": "configs/traffic_risk_params.json",
+      "model": "data/models/yolo11m.pt",
+      "calibration": {
+        "world_edges_m": {
+          "top": 30.0,
+          "right": 30.0,
+          "bottom": 30.0,
+          "left": 30.0
+        }
+      },
+      "runtime": {
+        "transform-width": 1300,
+        "transform-height": 1000,
+        "transform-inset-ratio": 0.15,
+        "known-quad-width-m": 30.0,
+        "known-quad-height-m": 20,
+        "transform-world-width-m": 40,
+        "transform-world-height-m": 40,
+        "right-panel-pixels-per-meter": 14,
+        "display-scale": 1.0,
+        "playback-speed": 1.0,
+        "sync-output-fps": 1,
+        "frame-stride": 1,
+        "target-process-fps": 20,
+        "imgsz": 640,
+        "display-max-width": 0,
+        "display-max-height": 0,
+        "save-video": 1,
+        "third-panel-mode": "quality",
+        "ui-scale": 1.2
+      }
+    },
+    "huangshanlu": {
+      "display_name": "Huangshanlu Intersection",
+      "video_dir": "data/videos/huangshanlu",
+      "calibration_image": "data/calibration/huangshanlu/image_000.png",
+      "homography": "configs/homography_huangshanlu.json",
+      "risk_params": "configs/traffic_risk_params_huangshanlu.json",
+      "model": "data/models/yolo11m.pt",
+      "calibration": {
+        "world_edges_m": {
+          "top": 30.0,
+          "right": 30.0,
+          "bottom": 30.0,
+          "left": 30.0
+        }
+      },
+      "runtime": {
+        "transform-width": 1300,
+        "transform-height": 1000,
+        "transform-inset-ratio": 0.15,
+        "known-quad-width-m": 30.0,
+        "known-quad-height-m": 20,
+        "transform-world-width-m": 40,
+        "transform-world-height-m": 40,
+        "right-panel-pixels-per-meter": 14,
+        "display-scale": 1.0,
+        "playback-speed": 1.0,
+        "sync-output-fps": 1,
+        "frame-stride": 1,
+        "target-process-fps": 20,
+        "imgsz": 640,
+        "display-max-width": 0,
+        "display-max-height": 0,
+        "save-video": 1,
+        "third-panel-mode": "quality",
+        "ui-scale": 1.2
+      }
+    },
+    "yongdukou":{
+        "display_name": "Yongdukou Intersection",
+        "video_dir": "data/videos/yongdukou",
+        "calibration_image": "data/calibration/yongdukou/image_000.png",
+        "homography": "configs/homography_yongdukou.json",
+        "risk_params": "configs/traffic_risk_params.json",
+        "model": "data/models/yolo11m.pt",
+        "calibration": {
+            "world_edges_m": {
+            "top": 30.0,
+            "right": 30.0,
+            "bottom": 30.0,
+            "left": 30.0
+            }
+        },
+        "runtime": {
+            "transform-width": 1300,
+            "transform-height": 1000,
+            "transform-inset-ratio": 0.15,
+            "known-quad-width-m": 30.0,
+            "known-quad-height-m": 20,
+            "transform-world-width-m": 40,
+            "transform-world-height-m": 40,
+            "right-panel-pixels-per-meter": 14,
+            "display-scale": 1.0,
+            "playback-speed": 1.0,
+            "sync-output-fps": 1,
+            "frame-stride": 1,
+            "target-process-fps": 20,
+            "imgsz": 640,
+            "display-max-width": 0,
+            "display-max-height": 0,
+            "save-video": 1,
+            "third-panel-mode": "quality",
+            "ui-scale": 1.2
+        }
+    },
+    "circle": {
+      "display_name": "Circle Intersection",
+      "video_dir": "data/videos/circle",
+      "calibration_image": "data/calibration/circle/image_000.png",
+      "homography": "configs/homography_circle.json",
+      "risk_params": "configs/traffic_risk_params_circle.json",
+      "model": "data/models/yolo11l.pt",
+      "calibration": {
+        "world_edges_m": {
+          "top": 70.0,
+          "right": 70.0,
+          "bottom": 70.0,
+          "left": 70.0
+        }
+      },
+      "runtime": {
+        "transform-width": 1300,
+        "transform-height": 1000,
+        "transform-inset-ratio": 0.15,
+        "known-quad-width-m": 20.0,
+        "known-quad-height-m": 20.0,
+        "transform-world-width-m": 40,
+        "transform-world-height-m": 40,
+        "right-panel-pixels-per-meter": 14,
+        "display-scale": 1.0,
+        "playback-speed": 1.0,
+        "sync-output-fps": 1,
+        "frame-stride": 1,
+        "target-process-fps": 20,
+        "imgsz": 1280,
+        "display-max-width": 0,
+        "display-max-height": 0,
+        "save-video": 1,
+        "third-panel-mode": "quality",
+        "ui-scale": 1.2
+      }
+    }
+  }
+}
