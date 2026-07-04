@@ -7,7 +7,7 @@
       "calibration_image": "data/calibration/default/image_000.png",
       "homography": "configs/homography_points_example.json",
       "risk_params": "configs/traffic_risk_params.json",
-      "model": "data/models/yolo11m.pt",
+      "model": "data/models/yolo11l.pt",
       "calibration": {
         "world_edges_m": {
           "top": 30.0,
@@ -44,7 +44,7 @@
       "calibration_image": "data/calibration/huangshanlu/image_000.png",
       "homography": "configs/homography_huangshanlu.json",
       "risk_params": "configs/traffic_risk_params_huangshanlu.json",
-      "model": "data/models/yolo11m.pt",
+      "model": "data/models/yolo11l.pt",
       "calibration": {
         "world_edges_m": {
           "top": 30.0,
@@ -81,7 +81,7 @@
         "calibration_image": "data/calibration/yongdukou/image_000.png",
         "homography": "configs/homography_yongdukou.json",
         "risk_params": "configs/traffic_risk_params.json",
-        "model": "data/models/yolo11m.pt",
+        "model": "data/models/yolo11l.pt",
         "calibration": {
             "world_edges_m": {
             "top": 30.0,
