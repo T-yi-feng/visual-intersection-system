@@ -167,6 +167,8 @@ class VehicleDetector:
         conf_van: float = 0.12,
         conf_other: float = 0.12,
         label_stabilize_window: int = 6,
+        memory_enabled: bool = True,
+        memory_max_age: int = 5,
     ):
         self.model = YOLO(model_path)
         self.tracker_config = tracker_config
@@ -191,6 +193,12 @@ class VehicleDetector:
         self.track_state = {}
         self.next_track_id = 0
 
+        # 记忆匹配
+        self.memory_bank = None
+        if memory_enabled:
+            from core.memory import MemoryBank
+            self.memory_bank = MemoryBank(max_age=memory_max_age)
+
     def detect_frame(
         self,
         frame: np.ndarray,
@@ -199,6 +207,7 @@ class VehicleDetector:
         conf: float = 0.22,
         iou: float = 0.40,
         annotate: bool = True,
+        frame_index: int = 0,
     ) -> 'DetectionResult':
         """
         对单帧运行检测+跟踪。
@@ -275,6 +284,12 @@ class VehicleDetector:
                         text = f"{label} #{track_id} {c:.2f}"
                         cv2.putText(annotated, text, (int(x1), int(y1) - 5),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+
+        # ★ 记忆匹配：遮挡后 ID 恢复
+        if self.memory_bank is not None and vehicles:
+            vehicles = self.memory_bank.match_and_restore(
+                vehicles, frame, frame_index
+            )
 
         return DetectionResult(
             vehicles=vehicles,

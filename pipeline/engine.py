@@ -149,7 +149,10 @@ class PipelineEngine:
               f"原点: ({world_origin_x:.1f}, {world_origin_y:.1f})")
 
         # 检测器
-        detector = VehicleDetector(model_path=cfg.model_path, tracker_config=cfg.tracker)
+        detector = VehicleDetector(
+            model_path=cfg.model_path, tracker_config=cfg.tracker,
+            memory_enabled=True,
+        )
 
         # 冲突分析器（延迟初始化：等第一帧拿到实际车辆坐标后再构建）
         conflict_analyzer = None
@@ -261,6 +264,7 @@ class PipelineEngine:
             # ── 步骤 1: 检测 + 跟踪（像素空间）─────────────────
             det_result = detector.detect_frame(
                 frame, timestamp, cfg.imgsz, cfg.conf, cfg.iou,
+                frame_index=frame_index,
             )
             perf['detect'] += time_mod.perf_counter() - _tick; _tick = time_mod.perf_counter()
 
