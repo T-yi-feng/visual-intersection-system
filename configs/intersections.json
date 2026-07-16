@@ -148,6 +148,43 @@
         "third-panel-mode": "quality",
         "ui-scale": 1.2
       }
+    },
+    "ziyou": {
+      "display_name": "Ziyou Road - Tongzhi Intersection",
+      "video_dir": "data/videos/ZiyouDalu-TongzhiJie",
+      "calibration_image": "data/calibration/ZiyouDalu-TongzhiJie/image_000.png",
+      "homography": "configs/homography_ziyou.json",
+      "risk_params": "configs/traffic_risk_params_circle.json",
+      "model": "data/models/yolo11m.pt",
+      "calibration": {
+        "world_edges_m": {
+          "top": 50.0,
+          "right": 30.0,
+          "bottom": 30.0,
+          "left": 30.0
+        }
+      },
+      "runtime": {
+        "transform-width": 1300,
+        "transform-height": 1000,
+        "transform-inset-ratio": 0.15,
+        "known-quad-width-m": 50.0,
+        "known-quad-height-m": 50.0,
+        "transform-world-width-m": 60,
+        "transform-world-height-m": 60,
+        "right-panel-pixels-per-meter": 14,
+        "display-scale": 1.0,
+        "playback-speed": 1.0,
+        "sync-output-fps": 1,
+        "frame-stride": 1,
+        "target-process-fps": 20,
+        "imgsz": 1280,
+        "display-max-width": 0,
+        "display-max-height": 0,
+        "save-video": 1,
+        "third-panel-mode": "quality",
+        "ui-scale": 1.2
+      }
     }
   }
 }

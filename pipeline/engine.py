@@ -35,15 +35,6 @@ from utils.drawing import fit_for_display, draw_text_with_bg, letterbox_to
 from utils.config_loader import load_vehicle_size_map
 from utils.async_writer import AsyncLivePreviewWriter
 
-# 默认 BEV 四边形坐标
-_DEFAULT_QUAD = [
-    [0.38, 0.24],   # 左上
-    [0.72, 0.30],   # 右上
-    [0.64, 0.80],   # 右下
-    [0.16, 0.62],   # 左下
-]
-
-
 # ============================================================
 # 引擎配置
 # ============================================================
@@ -180,33 +171,32 @@ class PipelineEngine:
         frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # ── 构建 BEV 变换矩阵 ────────────────────────────────
-        # 用四边形区域做透视变换，只映射路面区域，避免非道路像素干扰
-        bev_w, bev_h = cfg.bev_width, cfg.bev_height
+        # 使用标定文件中的 image_points 作为 warp 源四边形
+        # 取代旧的硬编码 _DEFAULT_QUAD，确保 BEV 与世界坐标对齐
+        world_w = world_pts[:, 0].max() - world_pts[:, 0].min()
+        world_h = world_pts[:, 1].max() - world_pts[:, 1].min()
 
-        # 归一化四边形坐标
-        if cfg.bev_quad:
-            parts = cfg.bev_quad.replace(';', ',').split(',')
-            coords = [float(p) for p in parts if p.strip()]
-            if len(coords) == 8:
-                quad_norm = np.array(coords, dtype=np.float32).reshape(4, 2)
-            else:
-                print(f"[WARN] bev_quad 格式错误，使用默认值")
-                quad_norm = np.array(_DEFAULT_QUAD, dtype=np.float32)
+        # BEV 输出尺寸：固定长边，短边按世界比例适配，避免变形
+        BEV_LONG = max(cfg.bev_width, cfg.bev_height)
+        if world_w >= world_h:
+            bev_w = BEV_LONG
+            bev_h = max(int(BEV_LONG * world_h / max(world_w, 1e-6)), 200)
         else:
-            quad_norm = np.array(_DEFAULT_QUAD, dtype=np.float32)
-        src_pts = quad_norm * np.array([frame_w, frame_h], dtype=np.float32)
+            bev_h = BEV_LONG
+            bev_w = max(int(BEV_LONG * world_w / max(world_h, 1e-6)), 200)
+
+        # 用标定文件的 4 个角点作为 H_bev 的源（与 h_mat 的坐标系一致）
+        src_pts = img_pts.astype(np.float32).reshape(4, 2)
         dst_pts = np.array([
-            [0, 0], [bev_w - 1, 0],
-            [bev_w - 1, bev_h - 1], [0, bev_h - 1]
+            [0, 0],
+            [bev_w - 1, 0],
+            [bev_w - 1, bev_h - 1],
+            [0, bev_h - 1],
         ], dtype=np.float32)
         H_bev = cv2.getPerspectiveTransform(src_pts, dst_pts)
 
-        # 像素/米 标定
-        world_w = world_pts[:, 0].max() - world_pts[:, 0].min()
-        world_h = world_pts[:, 1].max() - world_pts[:, 1].min()
-        ppm_x = bev_w / max(world_w, 1e-6)
-        ppm_y = bev_h / max(world_h, 1e-6)
-        ppm = 0.5 * (ppm_x + ppm_y)  # pixels per meter
+        # 像素/米（世界坐标宽度方向的一致性比例）
+        ppm = bev_w / max(world_w, 1e-6)
 
         # ── 状态变量 ──────────────────────────────────────────
         # 轨迹用 deque 自动淘汰旧数据，无需手动剪枝
