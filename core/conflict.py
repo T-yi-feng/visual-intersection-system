@@ -26,19 +26,21 @@ DIRECTION_BINS = 12
 BIN_NAMES = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW']
 BIN_DEGREES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
 
-# 精选冲突对：12 对（对向 6 + 正交 6）
-# 交织发生在方向差异足够大的路径之间：
-# - 对向（180°）：N-S, NNE-SSW, NE-SW, ENE-WSW, E-W, ESE-WNW
-# - 正交（~90°）：N-E, NNE-ENE, NE-ESE, E-SSE, SE-S, SSE-SSW
-# 相邻方向（<60°）的卷积核在空间上高度重叠，不会产生真正交织，跳过
+# 精选冲突对：12 对（对向 6 + 正交 6 + 同向跟驰 12）
+# - 对向（180°）：对向来车冲突
+# - 正交（~90°）：交叉路口冲突
+# - 同向（0°）：跟驰冲突（R_k² 捕获同向车队的重叠影响）
 DEFAULT_CONFLICT_PAIRS = [
     # 对向 (180°)
     (0, 6), (1, 7), (2, 8), (3, 9), (4, 10), (5, 11),
     # 正交 (~90°)
     (0, 3), (1, 4), (2, 5), (3, 6), (4, 7), (5, 8),
+    # 同向跟驰 (0°) — 后车影响场与前车重叠
+    (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5),
+    (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11),
 ]
 
-# 扩展冲突对（与默认一致，已全量覆盖）
+# 扩展冲突对（全量）
 EXTENDED_CONFLICT_PAIRS = DEFAULT_CONFLICT_PAIRS
 
 
@@ -273,18 +275,19 @@ def build_directional_kernel(
     -------
     K : (2*kw+1, 2*al+1) float32, 归一化核
     """
-    # 核尺寸：沿方向更长
-    k_h = 2 * kernel_half_width + 1  # 垂直方向（行）
-    k_w = 2 * arrow_half_len + 1     # 沿方向（列）
+    # 核尺寸：正方形（确保旋转后各个方向范围一致）
+    k_size = 2 * arrow_half_len + 1
+    k_h = k_size
+    k_w = k_size
 
     K = np.zeros((k_h, k_w), dtype=np.float32)
 
-    cx = arrow_half_len       # 沿方向中心
-    cy = kernel_half_width    # 垂直方向中心
+    cx = arrow_half_len       # 中心（行）
+    cy = arrow_half_len       # 中心（列）
 
     theta = heading_deg * pi / 180.0
-    ux, uy = cos(theta), sin(theta)       # 方向向量
-    nx, ny = -sin(theta), cos(theta)      # 法向量
+    ux, uy = cos(theta), -sin(theta)      # 方向向量（uy取反 → numpy行坐标y向下=South, 负y=North）
+    nx, ny = sin(theta), cos(theta)       # 法向量（垂直于方向）
 
     for i in range(k_h):
         for j in range(k_w):
@@ -296,10 +299,15 @@ def build_directional_kernel(
             # 垂直方向的投影距离
             perp = dx * nx + dy * ny
 
-            # 沿方向：在 arrow_half_len 范围内均匀，超出为 0
-            if abs(along) <= arrow_half_len:
-                f_along = 1.0
+            # 沿方向：高斯衰减（前向 sigma_along，后向快速衰减）
+            if along >= 0:
+                eff_sigma = sigma_along
+                eff_half = arrow_half_len
             else:
+                eff_sigma = sigma_along * 0.33   # 后向衰减快 3 倍
+                eff_half = arrow_half_len * 0.33 # 后向范围短 3 倍
+            f_along = exp(-0.5 * (along / eff_sigma) ** 2)
+            if abs(along) > eff_half:
                 f_along = 0.0
 
             # 垂直方向：高斯衰减
@@ -340,7 +348,8 @@ def build_all_directional_kernels(
             kernel_cfg.sigma_along,
             kernel_cfg.sigma_perp,
         )
-        kernels.append(K)
+        # cv2.filter2D 做的是卷积（核翻转180°），预翻转抵消
+        kernels.append(cv2.flip(K, -1))
 
     return kernels
 

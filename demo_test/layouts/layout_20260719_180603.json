@@ -1,0 +1,44 @@
+{
+  "vehicles": [
+    {
+      "track_id": 0,
+      "cx": 14.5,
+      "cy": 34.2,
+      "heading_deg": 0,
+      "speed_mps": 4.0,
+      "label": "car"
+    },
+    {
+      "track_id": 1,
+      "cx": 11.7,
+      "cy": 34.1,
+      "heading_deg": 0,
+      "speed_mps": 3.0,
+      "label": "truck"
+    },
+    {
+      "track_id": 2,
+      "cx": 22.4,
+      "cy": 34.1,
+      "heading_deg": 0,
+      "speed_mps": 2.0,
+      "label": "car"
+    },
+    {
+      "track_id": 3,
+      "cx": 17.2,
+      "cy": 34.2,
+      "heading_deg": 0,
+      "speed_mps": 3.0,
+      "label": "van"
+    },
+    {
+      "track_id": 4,
+      "cx": 19.9,
+      "cy": 34.1,
+      "heading_deg": 0,
+      "speed_mps": 2.0,
+      "label": "car"
+    }
+  ]
+}

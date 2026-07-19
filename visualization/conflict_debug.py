@@ -11,6 +11,7 @@
 import cv2
 import numpy as np
 from core.conflict import BIN_NAMES, DIRECTION_BINS
+from utils.theme import THEME, attr_color
 
 
 def _field_to_heatmap(field: np.ndarray, colormap: int = cv2.COLORMAP_JET) -> np.ndarray:
@@ -67,8 +68,10 @@ def _overlay_grid_on_bev(
     return result.astype(np.uint8)
 
 
-def _draw_grid_lines(img: np.ndarray, grid_size: int, color=(80, 80, 80)):
+def _draw_grid_lines(img: np.ndarray, grid_size: int, color=None):
     """在图像上画网格线辅助对齐"""
+    if color is None:
+        color = THEME["border_panel"]
     h, w = img.shape[:2]
     cell_h = h // grid_size
     cell_w = w // grid_size
@@ -103,7 +106,7 @@ def render_conflict_debug_window(
     cell_w = pw // 4
     cell_h = ph // 2
 
-    canvas = np.full((ph, pw, 3), (30, 30, 30), dtype=np.uint8)
+    canvas = np.full((ph, pw, 3), THEME["bg_canvas"], dtype=np.uint8)
 
     if conflict_result is None:
         _draw_label(canvas, "No conflict result", (pw // 3, ph // 2))
@@ -119,7 +122,7 @@ def render_conflict_debug_window(
     # 1. BEV + 占用场叠加
     panel1 = _overlay_grid_on_bev(bev_small, conflict_result.density_field,
                                    alpha=0.6, colormap=cv2.COLORMAP_BONE)
-    _draw_grid_lines(panel1, 8, (60, 60, 60))
+    _draw_grid_lines(panel1, 8)
     n_veh = len(conflict_result.vehicles)
     _draw_label(panel1, f"Occupancy ({n_veh} veh)", (8, 20))
     canvas[0:cell_h, 0:cell_w] = panel1
@@ -127,7 +130,7 @@ def render_conflict_debug_window(
     # 2. BEV + 冲突场叠加
     C = conflict_result.conflict_field
     panel2 = _overlay_grid_on_bev(bev_small, C, alpha=0.7, colormap=cv2.COLORMAP_HOT)
-    _draw_grid_lines(panel2, 8, (60, 60, 60))
+    _draw_grid_lines(panel2, 8)
     c_max = C.max()
     n_hot = int((C > 0).sum())
     _draw_label(panel2, f"Conflict (max={c_max:.3f}, hot={n_hot})", (8, 20))
@@ -153,15 +156,15 @@ def render_conflict_debug_window(
             continue
         inf = tid_to_inf.get(tid, 0)
         if inf > 0 and max_inf > 0:
-            ratio = min(inf / max_inf, 1.0)
-            color = (int(40*(1-ratio)), int(40*(1-ratio)), int(200*ratio+55))
+            inf_pct = (inf / max(max_inf, 1e-8)) * 100.0
+            color = attr_color(inf_pct)
             sz = max(int(18 * sx), 6)
             cv2.rectangle(panel3, (bx-sz, by-sz), (bx+sz, by+sz), color, 2)
-            cv2.putText(panel3, f"#{tid} {inf:.3f}", (bx+sz+2, by-4),
+            cv2.putText(panel3, f"#{tid} {inf_pct:.1f}%", (bx+sz+2, by-4),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255,255,255), 1, cv2.LINE_AA)
         else:
             sz = max(int(12 * sx), 4)
-            cv2.circle(panel3, (bx, by), sz, (120, 120, 120), 1)
+            cv2.circle(panel3, (bx, by), sz, THEME["text_dim"], 1)
 
     n_conflict = sum(1 for inf in influences if inf > 0)
     _draw_label(panel3, f"Attribution ({n_conflict}/{len(influences)} conflict)", (8, 20))
@@ -239,6 +242,6 @@ def render_conflict_debug_window(
     info = (f"Vehicles: {n_veh} | Conflicting: {n_conflict} | "
             f"Pairs: {len(conflict_result.conflict_pairs)} | Grid: {grid_size}x{grid_size}")
     cv2.putText(canvas, info, (10, info_y),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1, cv2.LINE_AA)
+               cv2.FONT_HERSHEY_SIMPLEX, 0.4, THEME["text_secondary"], 1, cv2.LINE_AA)
 
     return canvas

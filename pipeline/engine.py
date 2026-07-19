@@ -29,10 +29,14 @@ from core.phi import compute_phi, PhiEventTracker, RiskParamsReloader
 from core.conflict import ConflictAnalyzer
 from analysis.attribution import CongestionAttributor
 from analysis.ablation import AblationStudy
+from analysis.root_cause import compute_root_cause, root_cause_to_pct
 from visualization.phi_chart import render_phi_chart_panel
 from visualization.conflict_debug import render_conflict_debug_window
+from visualization.data_panel import render_data_panel
+from visualization.effects import draw_glow_box
 from utils.drawing import fit_for_display, draw_text_with_bg, letterbox_to
 from utils.config_loader import load_vehicle_size_map
+from utils.theme import THEME, phi_color, attr_color, phi_label_en
 from utils.async_writer import AsyncLivePreviewWriter
 
 # ============================================================
@@ -57,6 +61,9 @@ class EngineConfig:
         self.live_dir = getattr(args, 'live_dir', None)
         self.events_dir = getattr(args, 'events_dir', None)
         self.charts_dir = getattr(args, 'charts_dir', None)
+
+        # 站点
+        self.site_name = getattr(args, 'site_key', 'default')
 
         # 显示
         self.show_windows = getattr(args, 'show_windows', True)
@@ -124,7 +131,8 @@ class PipelineEngine:
         risk_params = risk_reloader.params
 
         # 单应性矩阵
-        h_mat, img_pts, world_pts = load_homography(cfg.homography_path)
+        h_mat, raw_img_pts, world_pts = load_homography(cfg.homography_path)
+        img_pts = raw_img_pts.copy()
 
         # 从标定文件自动推算世界坐标范围（不再硬编码）
         wp = np.array(world_pts, dtype=np.float64)
@@ -154,6 +162,11 @@ class PipelineEngine:
         # 事件跟踪
         event_tracker = PhiEventTracker(threshold=risk_params.phi_plot_threshold)
 
+        # 归因平滑状态（方案 B + C）
+        self._attr_history: dict[int, deque] = {}  # track_id → 最近 N 帧归因
+        self._hot_counter: dict[int, int] = {}      # track_id → 持续高亮计数
+        ATTR_SMOOTH_WINDOW = 5                      # 滑动窗口大小
+
         # 异步写入器
         async_writer = None
         if cfg.async_writer and cfg.live_dir:
@@ -169,6 +182,20 @@ class PipelineEngine:
         fps = cap.get(cv2.CAP_PROP_FPS) or cfg.target_fps if hasattr(cfg, 'target_fps') else 20.0
         frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # ── 自动缩放标定点以匹配实际视频分辨率（circle 视频 852x480 但标定点到 2525x1377） ──
+        if frame_w > 0 and frame_h > 0:
+            scale_x = frame_w / max(raw_img_pts[:, 0].max(), 1)
+            scale_y = frame_h / max(raw_img_pts[:, 1].max(), 1)
+            if scale_x < 0.8 or scale_y < 0.8:
+                scale = min(scale_x, scale_y)
+                img_pts = (raw_img_pts * scale).astype(np.float64)
+                h_mat, _ = cv2.findHomography(
+                    img_pts.reshape(-1, 1, 2).astype(np.float32),
+                    world_pts.reshape(-1, 1, 2).astype(np.float32),
+                )
+            else:
+                img_pts = raw_img_pts.copy()
 
         # ── 构建 BEV 变换矩阵 ────────────────────────────────
         # 使用标定文件中的 image_points 作为 warp 源四边形
@@ -285,7 +312,7 @@ class PipelineEngine:
             _alpha_base_heading = 0.15
             SMOOTH_ALPHA_POS = 1.0 - (1.0 - _alpha_base_pos) ** stride
             SMOOTH_ALPHA_HEADING = 1.0 - (1.0 - _alpha_base_heading) ** stride
-            MIN_DISPLACEMENT = 2.0    # 最小位移阈值（BEV 像素）
+            MIN_DISPLACEMENT = 3.0    # 最小位移阈值（BEV 像素，≈9cm @ ppm=32）
 
             # ── 步骤 4a: 构建 current_meta（BEV坐标 + EMA平滑航向）──
             current_meta = {}
@@ -519,76 +546,121 @@ class PipelineEngine:
             ROW2_H = 500     # 中：BEV全宽（大幅提升）
             ROW3_H = OUT_H - ROW1_H - ROW2_H  # = 180：Phi时间线
 
-            max_inf = max(influences) if influences and max(influences) > 0 else 1.0
-
-            tid_to_inf = {}
+            # ── 归因平滑：方案 B (中位数窗口) + C (驻留时间) ──
+            raw_inf = {}
             if influences and conflict_result:
                 for i, v in enumerate(conflict_result.vehicles):
-                    tid_to_inf[v.get('track_id', i)] = influences[i]
+                    tid = v.get('track_id', i)
+                    raw_inf[tid] = influences[i]
 
-            # ── 新布局：Row1(视频+BEV+数据) | Row2(冲突分析全宽) | Row3(Phi) ──
-            # Row1 三等分
-            ROW1_COL_W = OUT_W // 3  # = 640
-            panel_a = letterbox_to(det_result.annotated_frame, (ROW1_COL_W, ROW1_H), bg_color=(30, 30, 30))
+            # 方案 B: 5帧中位数窗口
+            if raw_inf:
+                for tid, val in raw_inf.items():
+                    if tid not in self._attr_history:
+                        self._attr_history[tid] = deque(maxlen=5)
+                    self._attr_history[tid].append(val)
+                    if len(self._attr_history[tid]) >= 3:
+                        window = sorted(self._attr_history[tid])
+                        raw_inf[tid] = window[len(window)//2]  # median
 
-            # 中间列：小BEV鸟瞰图
-            bev_small = letterbox_to(bev_frame, (ROW1_COL_W, ROW1_H), bg_color=(30, 30, 30))
+            # 方案 C: 驻留时间 —— 更新计数器（相对于 max_inf）
+            _max_r = max(raw_inf.values()) if raw_inf else 1.0
+            tid_to_inf = {}
+            highlighted_tids = set()
+            for tid, val in raw_inf.items():
+                inf_pct = (val / max(_max_r, 1e-8)) * 100.0
+                if tid not in self._hot_counter:
+                    self._hot_counter[tid] = 0
+                if inf_pct > 15.0:
+                    self._hot_counter[tid] = min(self._hot_counter[tid] + 1, 10)
+                else:
+                    self._hot_counter[tid] = max(self._hot_counter[tid] - 1, -5)
+                if self._hot_counter[tid] > 2:   # 连续3帧>阈值才高亮
+                    highlighted_tids.add(tid)
+                    # 用窗口最大值稳定显示
+                    if self._attr_history.get(tid):
+                        val = max(self._attr_history[tid])
+                tid_to_inf[tid] = val
 
-            # ── C：冲突热力 + 框内填充 + 箭头（Row2 全宽）──
-            panel_c = np.full((ROW2_H, OUT_W, 3), (20, 20, 20), dtype=np.uint8)
-            # 按最小比例缩放，确保BEV内容完整显示在面板内
+            max_inf = max(tid_to_inf.values()) if tid_to_inf and max(tid_to_inf.values()) > 0 else 1.0
+
+            # ── 因果溯源：必须先于渲染执行 ──
+            root_cause_tids = set()
+            tid_to_rc = {}
+            root_cause_pct = None
+            if conflict_result and conflict_result.vehicles:
+                rc_vehicles = []
+                for v in conflict_result.vehicles:
+                    tid = v.get('track_id', 0)
+                    meta = current_meta.get(tid, {})
+                    rc_vehicles.append({
+                        'track_id': tid,
+                        'world_x': meta.get('world_x', v.get('cx', 0)),
+                        'world_y': meta.get('world_y', v.get('cy', 0)),
+                        'speed_mps': v.get('speed_mps', 0),
+                        'heading_deg': v.get('heading_deg', 0),
+                    })
+                root_cause_scores = compute_root_cause(
+                    rc_vehicles, influences, conflict_result.conflict_field,
+                    conflict_analyzer.grid_cfg,
+                )
+                root_cause_pct = root_cause_to_pct(root_cause_scores)
+                # 标记根因最高的 Top-2 车辆
+                rc_indices = np.argsort(root_cause_scores)[::-1]
+                for rank in range(min(2, len(rc_indices))):
+                    idx = rc_indices[rank]
+                    if root_cause_scores[idx] > root_cause_scores.min():
+                        tid = conflict_result.vehicles[idx].get('track_id', idx)
+                        tid_to_rc[tid] = root_cause_pct[idx] if idx < len(root_cause_pct) else 0
+                        root_cause_tids.add(tid)
+                if frame_index % 20 == 0:
+                    ranked = conflict_result.get_vehicles_ranked_by_influence()
+                    n_red = len(root_cause_tids)
+                    max_rc = max(root_cause_pct) if len(root_cause_pct) > 0 else 0
+                    print(f"  [ROOT CAUSE] n_red={n_red} max_cause={max_rc:.1f}% tids={sorted(root_cause_tids)[:5]}")
+                    for ri in range(min(3, len(ranked))):
+                        idx, iv, v = ranked[ri]
+                        inf_pct = (iv / max(max(influences), 1e-8)) * 100.0
+                        rc_pct_v = root_cause_pct[idx] if idx < len(root_cause_pct) else 0
+                        tid = v.get('track_id', idx)
+                        lbl = v.get('label', 'car')
+                        star = " <<<" if tid in root_cause_tids else ""
+                        print(f"    #{tid} {lbl}: Inf={inf_pct:.1f}%  Cause={rc_pct_v:.1f}%{star}")
+
+            # ── 在原始视频帧上高亮标记 ──
+            # 橙色 = 高参与度 | 亮红 = 因果根因
+            HIGHLIGHT_ORANGE = (50, 140, 230)
+            HIGHLIGHT_RED = (50, 50, 255)
+            if (highlighted_tids or root_cause_tids) and det_result.vehicles:
+                for v in det_result.vehicles:
+                    tid = v.get('track_id', -1)
+                    if tid in root_cause_tids:
+                        color = HIGHLIGHT_RED
+                        tag = "ROOT CAUSE"
+                    elif tid in highlighted_tids:
+                        color = HIGHLIGHT_ORANGE
+                        tag = "CONGESTION"
+                    else:
+                        continue
+                    bb = v.get('bbox', (0,0,0,0))
+                    x1, y1, x2, y2 = map(int, bb)
+                    if x2 - x1 > 0:
+                        cv2.rectangle(det_result.annotated_frame, (x1, y1), (x2, y2), color, 3)
+                        cv2.putText(det_result.annotated_frame, f"#{tid} {tag}",
+                                    (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
+
+            # ── Row1(视频+BEV+数据) | Row2(冲突分析全宽) | Row3(Phi) ──
+            ROW1_COL_W = OUT_W // 3
+            panel_a = letterbox_to(det_result.annotated_frame, (ROW1_COL_W, ROW1_H),
+                                   bg_color=THEME["bg_canvas"])
+
+            bev_small = letterbox_to(bev_frame, (ROW1_COL_W, ROW1_H),
+                                     bg_color=THEME["bg_canvas"])
+
+            # ── C：车辆框 + 箭头（Row2 全宽，BEV 底图）──
+            panel_c = np.full((ROW2_H, OUT_W, 3), THEME["bg_canvas"], dtype=np.uint8)
             scale_c = min(OUT_W / max(bev_w, 1), ROW2_H / max(bev_h, 1))
 
-            # 底层：冲突热力图（映射到 BEV 像素坐标）
-            if conflict_result and conflict_result.conflict_max > 0:
-                try:
-                    inv_h = np.linalg.inv(h_mat)
-                except np.linalg.LinAlgError:
-                    inv_h = None
-                if inv_h is not None:
-                    C = conflict_result.conflict_field
-                    grid_size = C.shape[0]
-                    # 使用冲突分析器的实际网格参数（可能与配置值不同）
-                    cell_m = conflict_analyzer.grid_cfg.cell_size_m if conflict_analyzer else cfg.world_width_m / grid_size
-                    heat_layer = np.zeros((ROW2_H, OUT_W, 3), dtype=np.uint8)
-
-                    # 批量网格坐标 → 批量 BEV 投影（一次调用，性能提升 50x）
-                    step = max(2, grid_size // 32)
-                    gi_arr = np.arange(0, grid_size, step, dtype=np.float32)
-                    gj_arr = np.arange(0, grid_size, step, dtype=np.float32)
-                    gv, gu = np.meshgrid(gj_arr, gi_arr, indexing='xy')
-                    world_pts = np.stack([
-                        (gu + 0.5) * cell_m, (gv + 0.5) * cell_m
-                    ], axis=-1).reshape(-1, 1, 2).astype(np.float32)
-
-                    # 世界 → 图像 → BEV（各一次批量调用）
-                    img_pts = cv2.perspectiveTransform(world_pts, inv_h).reshape(-1, 2)
-                    bev_pts = cv2.perspectiveTransform(
-                        img_pts.reshape(-1, 1, 2).astype(np.float32), H_bev
-                    ).reshape(-1, 2)
-
-                    # 投影到 C 面板
-                    bx = (bev_pts[:, 0] * scale_c).astype(np.int32)
-                    by = (bev_pts[:, 1] * scale_c).astype(np.int32)
-                    vals = C[gv.astype(np.int32), gu.astype(np.int32)].ravel()
-                    cmax = conflict_result.conflict_max
-
-                    # 向量化热力图渲染（替代逐 cell cv2.rectangle 循环）
-                    sz = max(2, int(step * scale_c * 0.7))
-                    valid = (vals > 0) & (bx >= 0) & (bx < OUT_W) & (by >= 0) & (by < ROW2_H)
-                    bx_v, by_v, vals_v = bx[valid], by[valid], vals[valid]
-                    if len(bx_v) > 0:
-                        intensities = np.clip((vals_v / cmax * 255).astype(np.int32), 0, 255)
-                        for dx in range(-sz, sz + 1):
-                            for dy in range(-sz, sz + 1):
-                                px = np.clip(bx_v + dx, 0, OUT_W - 1)
-                                py = np.clip(by_v + dy, 0, ROW2_H - 1)
-                                heat_layer[py, px, 0] = np.maximum(heat_layer[py, px, 0], 0)
-                                heat_layer[py, px, 1] = np.maximum(heat_layer[py, px, 1], 0)
-                                heat_layer[py, px, 2] = np.maximum(heat_layer[py, px, 2], intensities)
-                    panel_c = cv2.addWeighted(heat_layer, 0.4, panel_c, 0.6, 0)
-
-            # 单遍绘制：填充 + 边框 + 箭头 + ID（合并原双重循环）
             fill_layer = np.zeros_like(panel_c)
             for tid, meta in current_meta.items():
                 bev_x = meta.get('bev_x', 0)
@@ -598,8 +670,8 @@ class PipelineEngine:
                 if not (0 <= cx_c < OUT_W and 0 <= cy_c < ROW2_H):
                     continue
 
-                label = meta.get('label', 'car')
-                size_info = vehicle_size_m.get(label, {'length_m': 4.0, 'width_m': 1.6})
+                vlabel = meta.get('label', 'car')
+                size_info = vehicle_size_m.get(vlabel, {'length_m': 4.0, 'width_m': 1.6})
                 half_l = size_info['length_m'] * ppm * 0.65 / 2 * scale_c
                 half_w = size_info['width_m'] * ppm * 0.65 / 2 * scale_c
 
@@ -613,64 +685,80 @@ class PipelineEngine:
                             int(cy_c - c[0]*sin_h - c[1]*cos_h)) for c in corners]
                 pts = np.array(rotated, dtype=np.int32)
 
-                # 填充色：红色深度=拥堵贡献度
                 inf = tid_to_inf.get(tid, 0)
-                if inf > 0 and max_inf > 0:
-                    ratio = min(inf / max_inf, 1.0)
-                    fill_color = (int(20 + 20 * (1 - ratio)),
-                                  int(10 + 20 * (1 - ratio)),
-                                  int(40 + 200 * ratio))
-                    cv2.fillPoly(fill_layer, [pts], fill_color)
+                inf_pct = (inf / max(max_inf, 1e-8)) * 100.0
 
-                # 边框（统一细白线）+ 方向箭头（灰色）
-                cv2.polylines(panel_c, [pts], True, (180, 180, 180), 1, cv2.LINE_AA)
+                if tid in root_cause_tids:
+                    # 因果根因：亮红填充 + 发光 + 粗红边框
+                    cv2.fillPoly(fill_layer, [pts], HIGHLIGHT_RED)
+                    draw_glow_box(panel_c, pts, HIGHLIGHT_RED, glow_radius=4)
+                    cv2.polylines(panel_c, [pts], True, HIGHLIGHT_RED, 2, cv2.LINE_AA)
+                    draw_text_with_bg(panel_c, f"#{tid} CAUSE",
+                                      (cx_c + 8, cy_c - 10),
+                                      color=HIGHLIGHT_RED, scale=0.45)
+                elif inf_pct > 15.0:
+                    # 高参与度：橙色填充 + 发光 + 粗橙边框 + 大字标签
+                    cv2.fillPoly(fill_layer, [pts], HIGHLIGHT_ORANGE)
+                    draw_glow_box(panel_c, pts, HIGHLIGHT_ORANGE, glow_radius=4)
+                    cv2.polylines(panel_c, [pts], True, HIGHLIGHT_ORANGE, 2, cv2.LINE_AA)
+                    draw_text_with_bg(panel_c, f"#{tid} {inf_pct:.0f}%",
+                                      (cx_c + 8, cy_c - 10),
+                                      color=HIGHLIGHT_ORANGE, scale=0.45)
+                elif inf_pct > 5.0:
+                    # 中归因：橙色填充 + 标准边框
+                    mid_color = (80, 150, 220)
+                    cv2.fillPoly(fill_layer, [pts], mid_color)
+                    cv2.polylines(panel_c, [pts], True, THEME["text_secondary"], 1, cv2.LINE_AA)
+                    draw_text_with_bg(panel_c, f"#{tid}",
+                                      (cx_c + 6, cy_c - 6),
+                                      color=THEME["text_secondary"], scale=0.32)
+                else:
+                    # 低归因：淡色填充 + 细线
+                    if inf > 0 and max_inf > 0:
+                        cv2.fillPoly(fill_layer, [pts], (60, 80, 100))
+                    cv2.polylines(panel_c, [pts], True, THEME["text_dim"], 1, cv2.LINE_AA)
+
+                # 方向箭头
+                speed = meta.get('speed_mps', 0)
                 long_side_m = max(size_info['length_m'], size_info['width_m'])
-                arrow_len = max(int(long_side_m * ppm * 0.65 * 1.5 * scale_c), 12)
+                base_arrow = max(int(long_side_m * ppm * 0.65 * 1.2 * scale_c), 10)
+                speed_factor = 1.0 + 0.5 * min(speed / 5.0, 2.0)
+                arrow_len = int(base_arrow * speed_factor)
                 head_x = int(cx_c + arrow_len * cos_h)
                 head_y = int(cy_c - arrow_len * sin_h)
+                arrow_color = HIGHLIGHT_RED if tid in root_cause_tids else (HIGHLIGHT_ORANGE if tid in highlighted_tids else (180, 180, 180))
                 cv2.arrowedLine(panel_c, (cx_c, cy_c), (head_x, head_y),
-                                (180, 180, 180), 1, cv2.LINE_AA, tipLength=0.15)
+                                arrow_color, 1, cv2.LINE_AA, tipLength=0.12)
 
-                # ID + 归因分数
-                label_text = f"#{tid}"
-                if inf > 0:
-                    label_text += f" {inf:.4f}"
-                draw_text_with_bg(panel_c, label_text, (cx_c + 8, cy_c - 8),
-                                  color=(220, 220, 220), scale=0.35)
+            panel_c = cv2.addWeighted(fill_layer, 0.50, panel_c, 0.50, 0)
 
-            # 混合填充层到背景（一次完成）
-            panel_c = cv2.addWeighted(fill_layer, 0.55, panel_c, 0.45, 0)
-
-            # ── Row 1: 视频 | 冲突分析 | 数据（三列并排）──
+            # ── Row 1: 视频 | 小BEV | 数据面板（三列并排）──
             conflict_count = sum(1 for inf in (influences or []) if inf > 0)
             conflict_total = len(conflict_result.vehicles) if conflict_result and conflict_result.vehicles else 0
-            data_panel = np.full((ROW1_H, ROW1_COL_W, 3), (30, 30, 30), dtype=np.uint8)
-            y = 16
-            draw_text_with_bg(data_panel, f"Phi: {phi:.3f}", (10, y), (0, 200, 255), 0.7, 2)
-            draw_text_with_bg(data_panel, f"Speed: {motion_stats['avg_speed_mps']:.1f} m/s", (10, y+32), (200,200,200), 0.55, 1)
-            draw_text_with_bg(data_panel, f"Vehicles: {motion_stats['total_count']}", (10, y+56), (200,200,200), 0.55, 1)
-            draw_text_with_bg(data_panel, f"Moving: {motion_stats['moving_count']}  Stationary: {motion_stats['stationary_count']}  Parked: {motion_stats['parked_count']}", (10, y+80), (200,200,200), 0.5, 1)
-            draw_text_with_bg(data_panel, f"Interwoven: {conflict_count}/{conflict_total}", (10, y+108), (255,120,120), 0.55, 1)
-            draw_text_with_bg(data_panel, f"Avg Speed: {motion_stats['avg_speed_mps']:.1f} m/s", (10, y+132), (100,255,100), 0.5, 1)
-
-            # Top-3 交织车辆
-            if influences and conflict_result and conflict_count > 0:
-                ranked = conflict_result.get_vehicles_ranked_by_influence()
-                for ri in range(min(3, len(ranked))):
-                    idx, inf, v = ranked[ri]
-                    if inf > 0:
-                        tid = v.get('track_id', idx)
-                        lbl = v.get('label', 'car')
-                        draw_text_with_bg(data_panel, f"  #{tid}({lbl}) {inf:.4f}",
-                                        (10, y + ri*20 + 160), (255,180,180), 0.4, 1)
+            data_panel = render_data_panel(
+                (ROW1_H, ROW1_COL_W), phi, motion_stats,
+                conflict_count, conflict_total,
+                influences, conflict_result, tid_to_inf, max_inf,
+                cfg.site_name, root_cause_pct,
+            )
 
             row1 = np.hstack([panel_a, bev_small, data_panel])
 
             # ── Row 3: Phi 时间线图表（全宽）──────────────────
+            ev_info = None
+            if event_tracker.in_event:
+                ev_info = {
+                    'active': True,
+                    'start_t': event_tracker.event_start_time,
+                    'peak_phi': event_tracker.peak_phi,
+                    'peak_t': event_tracker.peak_frame,
+                    'duration_s': timestamp - event_tracker.event_start_time,
+                }
             phi_chart = render_phi_chart_panel(
                 (ROW3_H, OUT_W),
                 event_tracker.phi_history,
                 event_tracker.threshold,
+                event_info=ev_info,
             )
 
             # ── 全屏拼接：视频+BEV+数据(上) | 冲突分析(中) | Phi(下) ──

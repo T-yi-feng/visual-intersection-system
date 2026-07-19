@@ -1,41 +1,26 @@
 """
-拥堵叠加可视化模块
+拥堵叠加可视化模块 (v2)
 
 负责实时拥堵热力图叠加：基于归因分数的车辆颜色渲染。
+使用统一主题色 attr_color()。
 """
 
 import cv2
 import numpy as np
+from utils.theme import attr_color
 
 
 def build_realtime_congestion_overlay(
     base_img: np.ndarray,
     tracked_meta: dict,
     influences: list[float],
-    vehicle_indices: dict,  # track_id -> index in influences
+    vehicle_indices: dict,
     vehicle_size_m: dict,
     pixels_per_meter: float,
     alpha_min: float = 0.18,
     alpha_max: float = 0.73,
 ) -> np.ndarray:
-    """
-    在图像上叠加拥堵贡献热力图。
-
-    归因分数越高的车辆，叠加颜色越深（越红）。
-
-    Parameters
-    ----------
-    base_img : 底图
-    tracked_meta : 跟踪元数据
-    influences : 每辆车的归因分数
-    vehicle_indices : track_id → influences 索引的映射
-    alpha_min : 最小透明度
-    alpha_max : 最大透明度
-
-    Returns
-    -------
-    overlay : np.ndarray, 叠加后的图像
-    """
+    """在图像上叠加拥堵贡献热力图。归因分数越高的车辆，叠加颜色越深。"""
     overlay = base_img.copy()
 
     if not influences:
@@ -54,17 +39,15 @@ def build_realtime_congestion_overlay(
         if inf <= 0:
             continue
 
-        # 归一化归因分数 → 颜色（蓝→红）
-        ratio = min(inf / max_inf, 1.0)
-        b = int(255 * (1 - ratio))
-        g = int(50 * (1 - abs(ratio - 0.5) * 2))
-        r = int(255 * ratio)
-        color = (b, g, r)
+        # 莫兰迪主题色 (替代原来的 蓝→红 硬编码)
+        inf_pct = (inf / max_inf) * 100.0
+        color = attr_color(inf_pct)
 
         # 透明度随归因分数增加
+        ratio = min(inf / max_inf, 1.0)
         alpha = alpha_min + (alpha_max - alpha_min) * ratio
 
-        # 绘制半透明车辆框
+        # 绘制半透明车辆旋转框
         cx, cy = meta.get('center', (0, 0))
         label = meta.get('label', 'car')
         size_info = vehicle_size_m.get(label, {'length_m': 4.0, 'width_m': 1.6})
@@ -72,7 +55,6 @@ def build_realtime_congestion_overlay(
         half_l = size_info['length_m'] * pixels_per_meter * 0.65 / 2
         half_w = size_info['width_m'] * pixels_per_meter * 0.65 / 2
 
-        # 旋转框
         heading = meta.get('heading_deg', 0)
         rad = np.radians(heading)
         cos_h, sin_h = np.cos(rad), np.sin(rad)
@@ -87,7 +69,6 @@ def build_realtime_congestion_overlay(
         pts = np.array(rotated, dtype=np.int32)
         cv2.fillPoly(overlay, [pts], color)
 
-    # 混合
     result = cv2.addWeighted(overlay, 0.4, base_img, 0.6, 0)
     return result
 
@@ -95,21 +76,24 @@ def build_realtime_congestion_overlay(
 def build_conflict_heatmap(
     conflict_field: np.ndarray,
     output_size: tuple[int, int],
-    colormap: int = cv2.COLORMAP_JET,
+    colormap: int = None,
 ) -> np.ndarray:
     """
-    将冲突场渲染为热力图。
+    将冲突场渲染为热力图 (默认 VIRIDIS, 色盲友好)。
 
     Parameters
     ----------
     conflict_field : (H, W) float32 冲突场
     output_size : (W, H) 输出尺寸
-    colormap : OpenCV colormap
+    colormap : OpenCV colormap, 默认 VIRIDIS
 
     Returns
     -------
     heatmap : np.ndarray, BGR 热力图
     """
+    if colormap is None:
+        colormap = cv2.COLORMAP_VIRIDIS
+
     c_max = conflict_field.max()
     if c_max > 0:
         normalized = (conflict_field / c_max * 255).astype(np.uint8)

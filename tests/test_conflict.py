@@ -121,18 +121,22 @@ class TestDirectionalKernel:
     def test_kernel_shape(self):
         K = build_directional_kernel(0, arrow_half_len=15, kernel_half_width=3,
                                       sigma_along=5.0, sigma_perp=1.0)
-        assert K.shape == (7, 31)  # (2*3+1, 2*15+1)
+        assert K.shape == (31, 31)  # 正方形核 (2*15+1)
 
     def test_kernel_normalized(self):
         K = build_directional_kernel(0, arrow_half_len=10, kernel_half_width=3,
                                       sigma_along=5.0, sigma_perp=1.0)
         assert abs(K.sum() - 1.0) < 1e-5
 
-    def test_kernel_symmetry(self):
+    def test_kernel_asymmetric(self):
+        """核前向应比后向长（沿方向不对称）"""
         K = build_directional_kernel(0, arrow_half_len=10, kernel_half_width=3,
                                       sigma_along=5.0, sigma_perp=1.0)
-        # 沿方向（水平）应该对称
-        assert np.allclose(K[:, :10], K[:, -1:10:-1], atol=1e-6)
+        h, w = K.shape
+        mid = w // 2
+        front = K[:, mid:].sum()   # 前向（沿方向正半轴）
+        back  = K[:, :mid].sum()   # 后向（沿方向负半轴）
+        assert front > back * 1.5, f"front={front:.4f} should be >> back={back:.4f}"
 
 
 # ============================================================
