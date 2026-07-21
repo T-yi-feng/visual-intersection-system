@@ -27,10 +27,10 @@ WORLD_SIZE_M = 50.0
 CELL_SIZE_M = WORLD_SIZE_M / GRID_SIZE
 
 # 核参数
-SIGMA_ALONG = 5.0
-SIGMA_PERP = 1.5
-KERNEL_HALF_LEN = 15
-KERNEL_HALF_WIDTH = 4
+SIGMA_ALONG = 3.0
+SIGMA_PERP = 0.6
+KERNEL_HALF_LEN = 10
+KERNEL_HALF_WIDTH = 6
 
 # 颜色
 BG_COLOR = (24, 24, 28)
@@ -71,7 +71,11 @@ def build_kernel(heading_deg: float) -> np.ndarray:
             f_along = exp(-0.5 * (along / eff_sigma) ** 2)
             if abs(along) > eff_half:
                 f_along = 0.0
-            f_perp = exp(-0.5 * (perp / SIGMA_PERP) ** 2)
+            if along >= 0:
+                fan_sigma = SIGMA_PERP * (1.0 + 0.6 * along / max(SIGMA_ALONG, 1e-6))
+            else:
+                fan_sigma = SIGMA_PERP
+            f_perp = exp(-0.5 * (perp / max(fan_sigma, 0.1)) ** 2)
             K[i, j] = f_along * f_perp
     total = K.sum()
     if total > 0:
@@ -253,7 +257,8 @@ def main():
                         gy = int(v['y'] / CELL_SIZE_M)
                         if 0 <= gx < GRID_SIZE and 0 <= gy < GRID_SIZE:
                             O_k[gy, gx] += w
-                # 卷积
+                # 卷积（flip 抵消 cv2.filter2D 翻转，与 core/conflict.py 一致）
+                K = cv2.flip(K, -1)
                 k_h, k_w = K.shape
                 pad = (k_h // 2, k_w // 2)
                 O_pad = np.pad(O_k, ((pad[0], pad[0]), (pad[1], pad[1])), mode='constant')
@@ -282,9 +287,13 @@ def main():
             for i, v in enumerate(vehicles):
                 px = int(offset_x + v['x'] / CELL_SIZE_M * cell_m)
                 py = int(offset_y + v['y'] / CELL_SIZE_M * cell_m)
-                # 车辆矩形
-                half_l = KERNEL_HALF_LEN * cell_m / 4
-                half_w = KERNEL_HALF_WIDTH * cell_m / 2
+                # 车辆矩形（与主项目一致: 车 4m×1.6m, 视觉缩放 0.65）
+                ppm_disp = panel_w / WORLD_SIZE_M
+                vlen = {'car':4.0,'truck':10.0,'van':4.2,'bus':9.0,'motorcycle':2.1,'bicycle':1.6}
+                vwid = {'car':1.6,'truck':2.6,'van':1.6,'bus':2.2,'motorcycle':0.8,'bicycle':0.6}
+                lbl = v.get('label', 'car')
+                half_l = vlen.get(lbl, 4.0) * 0.65 / 2 * ppm_disp
+                half_w = vwid.get(lbl, 1.6) * 0.65 / 2 * ppm_disp
                 rad = np.radians(v['heading'])
                 cos_h, sin_h = cos(rad), sin(rad)
                 corners = [(-half_l, -half_w), (half_l, -half_w),
@@ -295,8 +304,9 @@ def main():
                 color = VEHICLE_COLOR if i != 0 else (80, 200, 255)
                 cv2.fillPoly(main_panel, [pts], color)
                 cv2.polylines(main_panel, [pts], True, (255, 255, 255), 1)
-                # 方向线
-                arrow_len = int(KERNEL_HALF_LEN * cell_m * 0.8)
+                # 方向线（与主项目一致）
+                long_m = max(vlen.get(lbl, 4.0), vwid.get(lbl, 1.6))
+                arrow_len = int(long_m * 0.65 * 1.2 * ppm_disp)
                 hx = int(px + arrow_len * cos_h)
                 hy = int(py - arrow_len * sin_h)
                 cv2.arrowedLine(main_panel, (px, py), (hx, hy), (255, 255, 255), 1, tipLength=0.15)

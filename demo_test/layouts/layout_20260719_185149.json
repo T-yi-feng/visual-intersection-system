@@ -1,0 +1,100 @@
+{
+  "vehicles": [
+    {
+      "track_id": 0,
+      "cx": 12.6,
+      "cy": 26.9,
+      "heading_deg": 340,
+      "speed_mps": 4.0,
+      "label": "car"
+    },
+    {
+      "track_id": 1,
+      "cx": 20.3,
+      "cy": 25.0,
+      "heading_deg": 240,
+      "speed_mps": 3.0,
+      "label": "truck"
+    },
+    {
+      "track_id": 2,
+      "cx": 17.0,
+      "cy": 29.5,
+      "heading_deg": 350,
+      "speed_mps": 2.0,
+      "label": "car"
+    },
+    {
+      "track_id": 3,
+      "cx": 14.8,
+      "cy": 26.2,
+      "heading_deg": 340,
+      "speed_mps": 3.0,
+      "label": "van"
+    },
+    {
+      "track_id": 4,
+      "cx": 17.3,
+      "cy": 32.1,
+      "heading_deg": 0,
+      "speed_mps": 2.0,
+      "label": "car"
+    },
+    {
+      "track_id": 5,
+      "cx": 22.2,
+      "cy": 24.1,
+      "heading_deg": 256.8,
+      "speed_mps": 0.89,
+      "label": "truck"
+    },
+    {
+      "track_id": 6,
+      "cx": 20.8,
+      "cy": 34.7,
+      "heading_deg": 53.0,
+      "speed_mps": 2.88,
+      "label": "car"
+    },
+    {
+      "track_id": 7,
+      "cx": 18.0,
+      "cy": 38.4,
+      "heading_deg": 49.8,
+      "speed_mps": 4.97,
+      "label": "car"
+    },
+    {
+      "track_id": 8,
+      "cx": 19.6,
+      "cy": 39.8,
+      "heading_deg": 42.0,
+      "speed_mps": 1.97,
+      "label": "truck"
+    },
+    {
+      "track_id": 9,
+      "cx": 22.1,
+      "cy": 30.8,
+      "heading_deg": 339.0,
+      "speed_mps": 2.4,
+      "label": "van"
+    },
+    {
+      "track_id": 10,
+      "cx": 24.4,
+      "cy": 28.0,
+      "heading_deg": 296.2,
+      "speed_mps": 3.96,
+      "label": "car"
+    },
+    {
+      "track_id": 11,
+      "cx": 25.3,
+      "cy": 24.0,
+      "heading_deg": 259.1,
+      "speed_mps": 0.78,
+      "label": "car"
+    }
+  ]
+}

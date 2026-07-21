@@ -71,110 +71,79 @@ def compute_root_cause(
     world_pos = np.zeros((N, 2), dtype=np.float64)
     speed = np.zeros(N, dtype=np.float64)
     heading = np.zeros(N, dtype=np.float64)
-    conf_val = np.zeros(N, dtype=np.float64)
     cell_size = grid_cfg.cell_size_m
     ox, oy = grid_cfg.origin_x, grid_cfg.origin_y
 
     for i, v in enumerate(vehicles):
         world_pos[i] = [v.get('world_x', 0), v.get('world_y', 0)]
         speed[i] = v.get('speed_mps', 0)
-        # heading_deg 是 OpenCV 格式 (0°=N, 顺时针)，转为数学弧度 (0°=E, 逆时针)
         heading_deg = v.get('heading_deg', 0)
         heading[i] = np.radians(90.0 - heading_deg)
 
-        # 冲突场强度 = 该车所在网格位置的冲突值
-        gx = int((world_pos[i, 0] - ox) / cell_size)
-        gy = int((world_pos[i, 1] - oy) / cell_size)
-        if 0 <= gx < grid_cfg.grid_size and 0 <= gy < grid_cfg.grid_size:
-            conf_val[i] = conflict_field[gy, gx]
-        else:
-            conf_val[i] = 0.0
-
     # ── 第 1 步：构建 N×N 邻接矩阵 A ──
-    # A_ij = 车 j 对车 i 的拥堵依赖强度
-    # 物理含义：如果车 j 在车 i 前方且比 i 慢，则 j 是 i 的拥堵原因
+    # A_ij = 水从车辆 i 流向车辆 j 的强度
+    # 连接依据：两车之间的冲突场值 —— 有冲突就有因果传递，无关方向
     A = np.zeros((N, N), dtype=np.float64)
-    max_dist_cell = max_fwd_dist_m / cell_size
 
     for i in range(N):
         for j in range(N):
             if i == j:
                 continue
 
-            # 方向向量 i → j
             dx = world_pos[j, 0] - world_pos[i, 0]
             dy = world_pos[j, 1] - world_pos[i, 1]
             dist = np.hypot(dx, dy)
 
-            # 条件 1：距离在有效范围内
             if dist > max_fwd_dist_m or dist < 0.5:
                 continue
 
-            # 条件 2：j 在 i 的前方（指向 i 的行驶方向 ±60°）
-            fwd_angle = np.arctan2(dy, dx)
-            angle_diff = abs(fwd_angle - heading[i])
-            if angle_diff > np.pi and angle_diff < 2 * np.pi:
-                angle_diff = 2 * np.pi - angle_diff
-            if angle_diff > np.pi / 3:  # ±60° 以内才算前方
+            # ── 方向因果检查：j 必须在 i 的前方 ──
+            # 将 i→j 的向量投影到 i 的行驶方向，正投影 = j 在前方
+            proj = dx * np.cos(heading[i]) + dy * np.sin(heading[i])
+            if proj < 0:
                 continue
 
-            # 条件 3：j 比 i 慢（或是排队场景）才是拥堵源
-            speed_diff = speed[j] - speed[i]
-            if speed_diff > 0.5:  # j 比 i 更快 → j 不是 i 的拥堵源
+            # ── 冲突场连接因子 ──
+            mid_x = (world_pos[i, 0] + world_pos[j, 0]) / 2.0
+            mid_y = (world_pos[i, 1] + world_pos[j, 1]) / 2.0
+            mgx = int((mid_x - ox) / cell_size)
+            mgy = int((mid_y - oy) / cell_size)
+            c_factor = 0.0
+            if 0 <= mgx < grid_cfg.grid_size and 0 <= mgy < grid_cfg.grid_size:
+                c_factor = float(conflict_field[mgy, mgx])
+            if c_factor <= 0:
                 continue
 
-            # ── 速度差因子 ──
-            # 如果 j 明显比 i 慢: v_factor 高 (j 拖累了 i)
-            # 如果两者速度相近: 用位置打破平局
-            v_factor = max(0, min(-speed_diff / v_ref, 1.0))
+            # ── 距离因子 ──
+            d_factor = np.exp(-0.5 * (dist / (max_fwd_dist_m * 0.5)) ** 2)
 
-            # ── 位置因子：排队场景下，前方的车是根因 ──
-            pos_along_i = world_pos[i, 0] * np.cos(heading[i]) + world_pos[i, 1] * np.sin(heading[i])
-            pos_along_j = world_pos[j, 0] * np.cos(heading[j]) + world_pos[j, 1] * np.sin(heading[j])
-            pos_diff = pos_along_j - pos_along_i
+            A[i, j] = c_factor * d_factor
 
-            # j 必须在 i 的前方（沿行驶方向正投影）
-            if pos_diff < -2.0:  # j 在 i 后方 → 不可能引起 i 拥堵
-                continue
+    # ── 第 2 步：行归一化 + 迭代传播 ──
+    row_sums = A.sum(axis=1, keepdims=True)
+    A_norm = A / np.maximum(row_sums, 1e-10)
 
-            # 位置增强因子：j 越靠前，接收的水越多
-            # 当速度差小时用位置打破平局
-            p_factor = 1.0 + min(pos_diff / 8.0, 1.0)
-
-            # 基础连接：即使速度差为 0 也有最小连接（排队场景）
-            base = 0.15 if abs(speed_diff) < 0.1 else v_factor
-
-            # 距离因子：越近权重越高（高斯衰减）
-            d_factor = np.exp(-0.5 * (dist / (max_fwd_dist_m * 0.4)) ** 2)
-
-            A[i, j] = conf_val[i] * base * p_factor * d_factor
-
-    # ── 第 2 步：迭代传播 ──
     x_prop = np.ones(N, dtype=np.float64)
     effective_iters = max(n_iters, int(N * 1.5))
 
     for _ in range(effective_iters):
-        x_prop = x_prop + alpha * (A.T @ x_prop)
+        x_prop = x_prop + alpha * (A_norm.T @ x_prop)
         x_prop = np.clip(x_prop, 0, 1e6)
 
-    # ── 第 3 步：位置梯度信号（排队场景——所有车速度相近时使用） ──
-    # 沿行驶方向投影：越靠前的车根因分数越高
-    pos_along = np.array([
-        world_pos[i, 0] * np.cos(heading[i]) + world_pos[i, 1] * np.sin(heading[i])
-        for i in range(N)
-    ])
-    pos_norm = (pos_along - pos_along.min()) / max(pos_along.max() - pos_along.min(), 1e-8)
-    # 位置信号：队首=1.0，队尾=0.0，中间线性
-    pos_score = pos_norm * N * 0.5
+    # ── 第 3 步：冲突场加权 — 水只汇聚到真正拥堵的位置 ──
+    # 孤立车辆：冲突场≈0 → 分数≈0 → 不会被标记为根因
+    # 拥堵车辆：冲突场>0 → 分数>0 → 可能标记为根因
+    x_result = x_prop.copy()
+    for i in range(N):
+        gx = int((world_pos[i, 0] - ox) / cell_size)
+        gy = int((world_pos[i, 1] - oy) / cell_size)
+        pos_conf = 0.0
+        if 0 <= gx < grid_cfg.grid_size and 0 <= gy < grid_cfg.grid_size:
+            pos_conf = float(conflict_field[gy, gx])
+        # 没有冲突的地方水不停留（穿过继续往前传）
+        x_result[i] = x_prop[i] * min(pos_conf * 10.0, 1.0)
 
-    # ── 第 4 步：混合两个信号 ──
-    # 速度方差大时，用传播信号；速度方差小时（全停/全慢），用位置信号
-    speed_var = np.var(speed) / max(v_ref * v_ref, 1e-8)
-    w_pos = np.exp(-5.0 * speed_var)  # speed_var→0 → w→1（全用位置）
-    w_adj = 1.0 - w_pos               # speed_var大 → w→1（全用传播）
-
-    x = w_adj * x_prop + w_pos * pos_score
-    return x
+    return x_result
 
 
 def root_cause_to_pct(x: np.ndarray) -> np.ndarray:

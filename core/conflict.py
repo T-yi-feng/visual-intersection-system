@@ -80,10 +80,10 @@ class KernelConfig:
     """方向冲突核配置"""
     def __init__(
         self,
-        arrow_half_len: int = 15,
-        kernel_half_width: int = 4,
-        sigma_along: float = 5.0,
-        sigma_perp: float = 1.5,
+        arrow_half_len: int = 10,
+        kernel_half_width: int = 6,
+        sigma_along: float = 3.0,
+        sigma_perp: float = 0.6,
         density_radius: int = 3,
         speed_sigma: float = 2.0,
     ):
@@ -217,7 +217,7 @@ def decompose_direction(
     n_bins: int = DIRECTION_BINS,
 ) -> list[np.ndarray]:
     """
-    将连续方向场分解为 n_bins 个二值占用场。
+    将连续方向场软分配到 n_bins 个方向箱（高斯权重）。
 
     Parameters
     ----------
@@ -231,20 +231,15 @@ def decompose_direction(
     """
     deg = (Theta * 180.0 / pi) % 360.0
     bin_size = 360.0 / n_bins
+    sigma = bin_size / 3.0
 
     layers = []
     for k in range(n_bins):
         center = k * bin_size
-        lo = (center - bin_size / 2) % 360.0
-        hi = (center + bin_size / 2) % 360.0
-
-        if lo < hi:
-            in_bin = ((deg >= lo) & (deg < hi)).astype(np.float32)
-        else:
-            # 跨越 0°/360°
-            in_bin = ((deg >= lo) | (deg < hi)).astype(np.float32)
-
-        layers.append(in_bin * mask)
+        diff = np.abs(deg - center)
+        diff = np.minimum(diff, 360.0 - diff)
+        weight = np.exp(-0.5 * (diff / sigma) ** 2)
+        layers.append(weight * mask)
 
     return layers
 
@@ -310,8 +305,12 @@ def build_directional_kernel(
             if abs(along) > eff_half:
                 f_along = 0.0
 
-            # 垂直方向：高斯衰减
-            f_perp = exp(-0.5 * (perp / sigma_perp) ** 2)
+            # 垂直方向：扇形高斯衰减（前宽后窄）
+            if along >= 0:
+                fan_sigma = sigma_perp * (1.0 + 0.6 * along / max(sigma_along, 1e-6))
+            else:
+                fan_sigma = sigma_perp
+            f_perp = exp(-0.5 * (perp / max(fan_sigma, 0.1)) ** 2)
 
             K[i, j] = f_along * f_perp
 

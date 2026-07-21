@@ -12,6 +12,8 @@ Controls:
     Q: add  E: remove  S: save  L: load
 """
 
+import json
+import datetime
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -25,6 +27,7 @@ from core.conflict import (
     scatter_vehicles_to_grid, build_all_directional_kernels,
     compute_conflict_field, compute_vehicle_influence,
 )
+from analysis.root_cause import compute_root_cause, root_cause_to_pct
 
 WINDOW_W, WINDOW_H = 1400, 900
 WORLD_SIZE_M = 60.0
@@ -40,31 +43,33 @@ ACCENT = (80, 200, 255)
 WHITE = (255, 255, 255)
 
 STEP_NAMES = [
-    "1. Scatter: Vehicles → Grid",
+    "1. Scatter: Vehicles -> Grid",
     "2. Direction Binning (12 bins)",
-    "3. Kernel Convolution → R_k",
+    "3. Kernel Convolution -> R_k",
     "4. Conflict Field C(x,y)",
-    "5. Per-Vehicle Attribution",
+    "5. Conflict Pairs (16 pairs)",
     "6. Ablation: Remove Top-K",
+    "7. Root Cause: Water Drop Propagation",
 ]
 
 
 def main():
     grid_cfg = GridConfig(GRID_SIZE, CELL_SIZE_M, 0, 0)
-    kernel_cfg = KernelConfig(15, 4, 5.0, 1.5)
+    kernel_cfg = KernelConfig(15, 4, 5.0, 0.8)
     kernels = build_all_directional_kernels(DIRECTION_BINS, kernel_cfg)
 
-    # 车辆 — 默认构造一个十字交叉冲突场景
+    # 车辆 — 排队场景（全部向东car，前车越来越慢，队首已停 → 水滴逆流汇聚到队首）
     vehicles = [
-        {'cx': 28.0, 'cy': 40.0, 'speed_mps': 4.0, 'heading_deg': 0,   'label': 'car',   'track_id': 0},   # → 向东
-        {'cx': 20.0, 'cy': 35.0, 'speed_mps': 3.0, 'heading_deg': 0,   'label': 'truck', 'track_id': 1},   # → 向东
-        {'cx': 38.0, 'cy': 20.0, 'speed_mps': 2.0, 'heading_deg': 180,'label': 'car',   'track_id': 2},   # ← 向西
-        {'cx': 32.0, 'cy': 28.0, 'speed_mps': 3.0, 'heading_deg': 90, 'label': 'van',   'track_id': 3},   # ↓ 向南(90°=South)
-        {'cx': 40.0, 'cy': 42.0, 'speed_mps': 2.0, 'heading_deg': 270,'label': 'car',   'track_id': 4},   # ↑ 向北(270°=North)
+        {'cx': 20, 'cy': 30, 'speed_mps': 4.0, 'heading_deg': 90, 'label': 'car', 'track_id': 0},   # 队尾（最快）
+        {'cx': 26, 'cy': 30, 'speed_mps': 3.0, 'heading_deg': 90, 'label': 'car', 'track_id': 1},
+        {'cx': 32, 'cy': 30, 'speed_mps': 2.0, 'heading_deg': 90, 'label': 'car', 'track_id': 2},
+        {'cx': 38, 'cy': 30, 'speed_mps': 0.5, 'heading_deg': 90, 'label': 'car', 'track_id': 3},
+        {'cx': 44, 'cy': 30, 'speed_mps': 0.0, 'heading_deg': 90, 'label': 'car', 'track_id': 4},   # 队首（停止→根因）
     ]
     drag_idx = -1
     sel_idx = 0
     current_step = 3  # 默认显示冲突场
+    show_labels = True  # 车辆标签显示开关
     prev_O = None
 
     cv2.namedWindow("Convolution Pipeline Demo", cv2.WINDOW_NORMAL)
@@ -108,11 +113,12 @@ def main():
     cv2.setMouseCallback("Convolution Pipeline Demo", mouse_cb)
 
     print("=== Convolution Pipeline Demo ===")
-    print("Tab: switch step (1-6)")
+    print("1-7: switch step | Drag: move  Right-click: select  Scroll: heading")
     print("Drag: move  Right-click: select  Scroll: heading")
-    print("Q: add  E: remove  S: save  L: load  ESC: exit")
+    print("Q: add  E: remove  S: save  L: load  T: toggle labels  ESC: exit")
     print()
 
+    import traceback
     while True:
         canvas = np.full((WINDOW_H, WINDOW_W, 3), BG, dtype=np.uint8)
 
@@ -152,6 +158,44 @@ def main():
         C, pair_results, R = compute_conflict_field(layers_decomp, kernels, conflict_pairs)
         influences = compute_vehicle_influence(vehicles, R, grid_cfg, conflict_pairs)
 
+        # ── 根因溯源：水滴传播 ──
+        # 映射 vehicle dict 到 root_cause 需要的字段名
+        rc_vehicles = []
+        for v in vehicles:
+            rc_vehicles.append({
+                'track_id': v.get('track_id', 0),
+                'world_x': v.get('cx', 0),
+                'world_y': v.get('cy', 0),
+                'speed_mps': v.get('speed_mps', 0),
+                'heading_deg': v.get('heading_deg', 0),
+            })
+        root_cause_scores = compute_root_cause(rc_vehicles, influences, C, grid_cfg)
+        root_cause_pct = root_cause_to_pct(root_cause_scores)
+        max_inf = max(influences) if influences and max(influences) > 0 else 1.0
+        # 高亮标记
+        # 橙色 = 冲突参与度高 (influence > 15%)
+        highlighted_tids = set()
+        for i, inf in enumerate(influences):
+            pct = inf / max_inf * 100 if max_inf > 0 else 0
+            if pct > 15.0:
+                highlighted_tids.add(vehicles[i].get('track_id', i))
+
+        # 红色 = 根因 Top-2 + 绝对冲突参与 > 5% + 车辆位置有冲突场
+        root_cause_tids = set()
+        rc_indices = np.argsort(root_cause_scores)[::-1]
+        for rank in range(min(2, len(rc_indices))):
+            idx = rc_indices[rank]
+            tid = vehicles[idx].get('track_id', idx)
+            inf_pct = influences[idx] / max_inf * 100 if idx < len(influences) and max_inf > 0 else 0
+            # 车辆位置冲突值
+            gx = int(vehicles[idx]['cx'] / grid_cfg.cell_size_m)
+            gy = int(vehicles[idx]['cy'] / grid_cfg.cell_size_m)
+            pos_conf = 0.0
+            if 0 <= gx < GRID_SIZE and 0 <= gy < GRID_SIZE:
+                pos_conf = float(C[gy, gx])
+            if root_cause_scores[idx] > root_cause_scores.min() and inf_pct > 5.0 and pos_conf > 0:
+                root_cause_tids.add(tid)
+
         # ── 根据当前步骤在主面板上绘制 ──
         if current_step == 0:
             # Step 1: 占用场
@@ -178,16 +222,16 @@ def main():
                 r = 80
                 # 只有该方向有车才画
                 if layers_decomp[k].sum() > 0:
-                    intensity = min(layers_decomp[k].sum() * 80, 255)
+                    c_val = int(float(min(layers_decomp[k].sum() * 80, 255)))
                     # 扇形
                     for a in range(int(angle - bin_size / 2), int(angle + bin_size / 2)):
                         rad_a = np.radians(a)
                         px = int(cx_s + r * cos(rad_a))
                         py = int(cy_s - r * sin(rad_a))
-                        cv2.line(main_panel, (cx_s, cy_s), (px, py), (int(intensity*0.5), int(intensity*0.7), intensity), 1)
+                        cv2.line(main_panel, (cx_s, cy_s), (px, py), (int(c_val*0.5), int(c_val*0.7), c_val), 1)
                     px_e = int(cx_s + (r+10) * cos(rad))
                     py_e = int(cy_s - (r+10) * sin(rad))
-                    cv2.arrowedLine(main_panel, (cx_s, cy_s), (px_e, py_e), (int(intensity*0.5), int(intensity*0.7), intensity), 2, tipLength=0.15)
+                    cv2.arrowedLine(main_panel, (cx_s, cy_s), (px_e, py_e), (int(c_val*0.5), int(c_val*0.7), c_val), 2, tipLength=0.15)
                     cv2.putText(main_panel, f"{BIN_NAMES[k]}", (px_e+2, py_e+2), cv2.FONT_HERSHEY_SIMPLEX, 0.25, DIM, 1)
 
             # 在网格上叠加方向着色
@@ -222,7 +266,11 @@ def main():
                     Rc = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
                 R_rs = cv2.resize(Rc, (thumb_sz, thumb_sz), interpolation=cv2.INTER_LINEAR)
                 cv2.rectangle(R_rs, (0, 0), (thumb_sz-1, thumb_sz-1), (60, 60, 60), 1)
-                main_panel[ty:ty+thumb_sz, tx:tx+thumb_sz] = R_rs
+                t_end_y = min(ty + thumb_sz, p_size)
+                t_end_x = min(tx + thumb_sz, p_size)
+                R_crop = R_rs[:t_end_y-ty, :t_end_x-tx]
+                if R_crop.shape[0] > 0 and R_crop.shape[1] > 0:
+                    main_panel[ty:t_end_y, tx:t_end_x] = R_crop
                 cv2.putText(main_panel, f"R_{k} ({BIN_NAMES[k]})", (tx, ty+thumb_sz+10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.3, DIM, 1)
 
@@ -262,7 +310,12 @@ def main():
                     Cc = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
                 Cr = cv2.resize(Cc, (thumb_sz, thumb_sz), interpolation=cv2.INTER_LINEAR)
                 cv2.rectangle(Cr, (0, 0), (thumb_sz-1, thumb_sz-1), (60, 60, 60), 1)
-                main_panel[ty:ty+thumb_sz, tx:tx+thumb_sz] = Cr
+                # 裁剪到面板边界内
+                t_end_y = min(ty + thumb_sz, p_size)
+                t_end_x = min(tx + thumb_sz, p_size)
+                Cr_crop = Cr[:t_end_y-ty, :t_end_x-tx]
+                if Cr_crop.shape[0] > 0 and Cr_crop.shape[1] > 0:
+                    main_panel[ty:t_end_y, tx:t_end_x] = Cr_crop
                 name1, name2 = BIN_NAMES[k1].split('/')[0], BIN_NAMES[k2].split('/')[0]
                 cv2.putText(main_panel, f"{name1}↔{name2}", (tx, ty+thumb_sz+10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.28, DIM, 1)
@@ -285,23 +338,78 @@ def main():
                     cv2.rectangle(main_panel, (12, ty+30), (12+bar_w, ty+44), (50, 200, 255), -1)
                     cv2.rectangle(main_panel, (12, ty+30), (p_size-28, ty+44), (60, 60, 60), 1)
 
-        # 车辆方向箭头（所有步骤都画）
-        for i, v in enumerate(vehicles):
-            px = int(v['cx'] / WORLD_SIZE_M * p_size)
-            py = int(v['cy'] / WORLD_SIZE_M * p_size)
-            rad = np.radians(v['heading_deg'])
-            al = int(CELL_SIZE_M * 3 / WORLD_SIZE_M * p_size)
-            hx = int(px + al * cos(rad))
-            hy = int(py - al * sin(rad))
-            # 选中的车用绿色标记
-            color = (50, 255, 100) if i == sel_idx else (200, 200, 200)
-            cv2.arrowedLine(main_panel, (px, py), (hx, hy), color, 1, tipLength=0.2)
+        elif current_step == 6:
+            # Step 7: 根因传播 — 水滴算法
+            for i, v in enumerate(vehicles):
+                tid = v.get('track_id', i)
+                px = int(v['cx'] / WORLD_SIZE_M * p_size)
+                py = int(v['cy'] / WORLD_SIZE_M * p_size)
+                inf_pct = influences[i] / max_inf * 100 if i < len(influences) else 0
+                rc_pct = root_cause_pct[i] if i < len(root_cause_pct) else 0
+
+                # 颜色：橙色=拥堵参与  红色=因果根因  灰色=普通
+                if tid in root_cause_tids:
+                    color = (50, 50, 255)
+                    label = f"#{tid} ROOT CAUSE {rc_pct:.0f}%"
+                elif tid in highlighted_tids:
+                    color = (50, 140, 230)
+                    label = f"#{tid} CONGESTION {inf_pct:.0f}%"
+                else:
+                    color = (100, 100, 100)
+                    label = f"#{tid} inf={inf_pct:.0f}%"
+
+                _draw_vehicle(main_panel, v, px, py, color, p_size)
+                if show_labels:
+                    (tw, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
+                    lx, ly = px - tw//2, py - 22
+                    if lx < 0: lx = 2
+                    if ly < 10: ly = py + 10
+                    cv2.rectangle(main_panel, (lx-2, ly-14), (lx+tw+2, ly+2), (20, 20, 24), -1)
+                    cv2.putText(main_panel, label, (lx, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.38, color, 1, cv2.LINE_AA)
+
+            # 排名面板（右上角）
+            if influences:
+                ranked_rc = sorted(enumerate(root_cause_pct), key=lambda x: x[1], reverse=True)
+                n_show = min(len(ranked_rc), 8)
+                px0, py0 = p_size - 210, 40
+                cv2.rectangle(main_panel, (px0-6, py0-14), (px0+204, py0+n_show*22+10), (30, 30, 36), -1)
+                cv2.rectangle(main_panel, (px0-6, py0-14), (px0+204, py0+n_show*22+10), (50, 50, 55), 1)
+                cv2.putText(main_panel, "  Vehicle   Inf%   Cause%", (px0, py0), cv2.FONT_HERSHEY_SIMPLEX, 0.32, DIM, 1)
+                for ri in range(n_show):
+                    idx, rc_val = ranked_rc[ri]
+                    tid = vehicles[idx].get('track_id', idx)
+                    inf_pct = influences[idx] / max_inf * 100 if idx < len(influences) and max_inf > 0 else 0
+                    rc_pct = rc_val
+                    iy = py0 + 18 + ri * 22
+                    # 颜色
+                    if idx < len(vehicles) and vehicles[idx].get('track_id', idx) in root_cause_tids:
+                        row_color = (50, 50, 255)
+                    elif inf_pct > 15.0:
+                        row_color = (50, 140, 230)
+                    else:
+                        row_color = DIM
+                    cv2.putText(main_panel, f"  #{tid:<4d}  {inf_pct:>4.0f}%  {rc_pct:>4.0f}%",
+                                (px0, iy), cv2.FONT_HERSHEY_SIMPLEX, 0.32, row_color, 1)
+
+            cv2.putText(main_panel, "Orange = High Congestion | Red = Root Cause (water accumulates at source)",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, DIM, 1)
+
+        # 车辆框+方向箭头（所有步骤都画，Step 7 已单独处理框+箭头+标签）
+        if current_step != 6:
+            for i, v in enumerate(vehicles):
+                px = int(v['cx'] / WORLD_SIZE_M * p_size)
+                py = int(v['cy'] / WORLD_SIZE_M * p_size)
+                color = (50, 255, 100) if i == sel_idx else (180, 180, 180)
+                _draw_vehicle(main_panel, v, px, py, color, p_size)
+                if i == sel_idx:
+                    cv2.putText(main_panel, f"#{v.get('track_id', i)}", (px+8, py-8),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.35, (50, 255, 100), 1)
 
         cv2.rectangle(main_panel, (0, 0), (p_size-1, p_size-1), (50, 50, 55), 1)
         canvas[p_y0:p_y0+p_size, p_x0:p_x0+p_size] = main_panel
 
         # ── 标题 ──
-        cv2.putText(canvas, f"Step {current_step+1}/6:  {STEP_NAMES[current_step]}",
+        cv2.putText(canvas, f"Step {current_step+1}/7:  {STEP_NAMES[current_step]}",
                     (20, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6, TEXT, 2)
 
         # ── 右侧车辆面板 ──
@@ -327,9 +435,10 @@ def main():
             "Each vehicle occupies one grid cell (Occupancy Field O)",
             f"Directions split into {DIRECTION_BINS} bins at {bin_size:.0f}deg intervals",
             "Anisotropic Gaussian convolution -> 12 influence fields R_k",
-            "Conflict field C = sum(R_a x R_b) over 12 conflict pairs",
-            "Per-vehicle: Influence_i = R_{ki}(P_i) x sum(R_{k'})(P_i)",
+            "Conflict field C = sum(R_a x R_b) over 24 conflict pairs",
+            "Conflict pairs: opposite 6 + orthogonal 6 + same-direction 12",
             "Ablation: remove Top-K vehicles -> conflict field decay",
+            "Root Cause: water drops propagate upstream via adjacency matrix -> source is RED",
         ]
         if current_step < len(descs):
             cv2.putText(canvas, descs[current_step],
@@ -349,32 +458,37 @@ def main():
         try:
             cv2.imshow("Convolution Pipeline Demo", canvas)
         except Exception as e:
-            print(f"[RENDER ERROR] {e}")
-            break
+            traceback.print_exc()
+            print(f"[RENDER ERROR in step {current_step+1}] {e}")
+            # 不要 break，继续循环
         key = cv2.waitKey(100) & 0xFF
 
         if key == 27:
             break
-        elif key in (49, 50, 51, 52, 53, 54):  # '1'~'6'
+        elif key in (49, 50, 51, 52, 53, 54, 55):  # '1'~'7'
             current_step = key - 49
+            if current_step >= len(STEP_NAMES):
+                current_step = len(STEP_NAMES) - 1
             print(f"  Step {current_step+1}")
-        elif key == ord('q'):
+        elif key in (ord('t'), ord('T')):
+            show_labels = not show_labels
+            print(f"  Vehicle labels: {'ON' if show_labels else 'OFF'}")
+        elif key in (ord('q'), ord('Q')):
             import random
             vehicles.append({
                 'cx': random.uniform(5, WORLD_SIZE_M-5),
                 'cy': random.uniform(5, WORLD_SIZE_M-5),
                 'speed_mps': random.uniform(0, 5),
                 'heading_deg': random.uniform(0, 360),
-                'label': random.choice(['car', 'truck', 'van']),
+                'label': 'car',
                 'track_id': max(v['track_id'] for v in vehicles) + 1 if vehicles else 0,
             })
             print(f"  Added vehicle #{len(vehicles)-1}")
         elif key == ord('e') and len(vehicles) > 1:
             vehicles.pop()
             print(f"  Removed vehicle, now {len(vehicles)}")
-        elif key == ord('s'):
+        elif key in (ord('s'), ord('S')):
             # 保存布局
-            import json, datetime
             save_dir = Path(__file__).resolve().parent / "layouts"
             save_dir.mkdir(exist_ok=True)
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -390,35 +504,63 @@ def main():
                 } for v in vehicles],
             }
             save_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
-            print(f"  💾 Saved {len(vehicles)} vehicles to {save_path.name}")
-        elif key == ord('l'):
-            # 加载布局
-            save_dir = Path(__file__).resolve().parent / "layouts"
-            if not save_dir.exists():
-                print("  No saved layouts found.")
-                continue
-            files = sorted(save_dir.glob("*.json"))
-            if not files:
-                print("  No saved layouts found.")
-                continue
-            # 加载最新的
-            latest = files[-1]
-            data = json.loads(latest.read_text(encoding='utf-8'))
-            if 'vehicles' in data:
-                vehicles.clear()
-                for vd in data['vehicles']:
-                    vehicles.append({
-                        'track_id': vd.get('track_id', len(vehicles)),
-                        'cx': vd['cx'],
-                        'cy': vd['cy'],
-                        'heading_deg': vd['heading_deg'],
-                        'speed_mps': vd.get('speed_mps', 3.0),
-                        'label': vd.get('label', 'car'),
-                    })
-                sel_idx = 0
-                print(f"  📂 Loaded {len(vehicles)} vehicles from {latest.name}")
+            print(f"  📂Saved {len(vehicles)} vehicles to {save_path.name}")
+        elif key in (ord('l'), ord('L')):
+            try:
+                save_dir = Path(__file__).resolve().parent / "layouts"
+                if not save_dir.exists():
+                    print("  No saved layouts found.")
+                    continue
+                files = sorted(save_dir.glob("*.json"))
+                if not files:
+                    print("  No saved layouts found.")
+                    continue
+                latest = files[-1]
+                data = json.loads(latest.read_text(encoding='utf-8'))
+                if 'vehicles' in data:
+                    vehicles.clear()
+                    for vd in data['vehicles']:
+                        vehicles.append({
+                            'track_id': vd.get('track_id', len(vehicles)),
+                            'cx': vd['cx'],
+                            'cy': vd['cy'],
+                            'heading_deg': vd['heading_deg'],
+                            'speed_mps': vd.get('speed_mps', 3.0),
+                            'label': 'car',
+                        })
+                    sel_idx = 0
+                    print(f"  📂Loaded {len(vehicles)} vehicles from {latest.name}")
+            except Exception as e:
+                print(f"  📂Load failed: {e}")
 
     cv2.destroyAllWindows()
+
+
+def _draw_vehicle(panel, v, px, py, color, p_size):
+    """画车辆矩形框+方向箭头（与主项目尺寸一致）"""
+    vlen = {'car':4.0,'truck':10.0,'van':4.2,'bus':9.0,'motorcycle':2.1,'bicycle':1.6}
+    vwid = {'car':1.6,'truck':2.6,'van':1.6,'bus':2.2,'motorcycle':0.8,'bicycle':0.6}
+    lbl = v.get('label', 'car')
+    ppm = p_size / WORLD_SIZE_M
+    half_l = vlen.get(lbl, 4.0) * 0.65 / 2 * ppm
+    half_w = vwid.get(lbl, 1.6) * 0.65 / 2 * ppm
+
+    rad = np.radians(v['heading_deg'])
+    cos_h, sin_h = cos(rad), sin(rad)
+    corners = [(-half_l, -half_w), (half_l, -half_w),
+               (half_l, half_w), (-half_l, half_w)]
+    rotated = [(int(px + c[0]*cos_h - c[1]*sin_h),
+                int(py - c[0]*sin_h - c[1]*cos_h)) for c in corners]
+    pts = np.array(rotated, dtype=np.int32)
+
+    cv2.fillPoly(panel, [pts], color)
+    cv2.polylines(panel, [pts], True, (255, 255, 255), 1, cv2.LINE_AA)
+
+    long_m = max(vlen.get(lbl, 4.0), vwid.get(lbl, 1.6))
+    arrow_len = int(long_m * 0.65 * 1.2 * ppm)
+    hx = int(px + arrow_len * cos_h)
+    hy = int(py - arrow_len * sin_h)
+    cv2.arrowedLine(panel, (px, py), (hx, hy), (255, 255, 255), 1, cv2.LINE_AA, tipLength=0.15)
 
 
 if __name__ == "__main__":

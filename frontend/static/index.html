@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Traffic System — Intersection Conflict Intelligence</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Particle Background -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- App Layout -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="app-layout">
+
+  <!-- ── Sidebar ────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="logo-dot"></span>
+      <span>Visual Traffic</span>
+    </div>
+
+    <nav class="sidebar-nav" id="sidebar-nav">
+      <button class="nav-item active" data-section="hero">
+        <span class="nav-icon">◆</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-item" data-section="pipeline">
+        <span class="nav-icon">⇢</span>
+        <span class="nav-label">Pipeline</span>
+      </button>
+      <button class="nav-item" data-section="algorithm">
+        <span class="nav-icon">◈</span>
+        <span class="nav-label">Algorithm</span>
+      </button>
+      <button class="nav-item" data-section="launcher">
+        <span class="nav-icon">▶</span>
+        <span class="nav-label">Launcher</span>
+      </button>
+      <button class="nav-item" data-section="monitor">
+        <span class="nav-icon">◉</span>
+        <span class="nav-label">Monitor</span>
+      </button>
+      <button class="nav-item" data-section="architecture">
+        <span class="nav-icon">▣</span>
+        <span class="nav-label">Architecture</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-row">
+        <span class="status-dot online" id="sidebar-dot"></span>
+        <span id="sidebar-status">System Ready</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main Viewport ──────────────────────────────────────── -->
+  <main class="main-viewport" id="main-viewport">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Section: Hero / Home -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="view-section active" id="sec-hero" data-section="hero">
+      <div class="hero-wrap">
+        <div class="reveal">
+          <div class="hero-badge">
+            <span class="dot"></span> Real-time · GPU-Accelerated · Patent Algorithm
+          </div>
+        </div>
+
+        <h1 class="hero-title reveal delay-1">
+          Intersection<br>
+          <span class="gradient-text">Conflict Intelligence</span>
+        </h1>
+
+        <p class="hero-subtitle reveal delay-2">
+          Directional Field Convolution for real-time traffic conflict detection,
+          congestion attribution, and root cause tracing — from fixed surveillance
+          cameras to actionable insights.
+        </p>
+
+        <!-- Phi Ring -->
+        <div class="phi-display reveal delay-3" id="hero-phi">
+          <div class="phi-ring">
+            <svg width="130" height="130" viewBox="0 0 130 130">
+              <circle class="bg-circle" cx="65" cy="65" r="58"/>
+              <circle class="phi-circle" id="hero-phi-circle" cx="65" cy="65" r="58"
+                      stroke="#6baf6b" stroke-dasharray="364.42" stroke-dashoffset="364.42"/>
+            </svg>
+            <div class="phi-value">
+              <span class="phi-number" id="hero-phi-val" style="color:#6baf6b">0.00</span>
+              <span class="phi-label">Phi Index</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-actions reveal delay-4" id="hero-actions">
+          <button class="btn btn-accent btn-lg" data-nav="launcher">▶ Launch Pipeline</button>
+          <button class="btn btn-secondary btn-lg" data-nav="algorithm">Explore Algorithm</button>
+          <button class="btn btn-secondary btn-lg" data-nav="monitor">Live Monitor</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Section: Pipeline -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="view-section" id="sec-pipeline" data-section="pipeline">
+      <div class="view-inner">
+        <div class="reveal"><div class="sec-label">Processing Pipeline</div></div>
+        <h2 class="sec-title reveal delay-1">From Raw Video to Actionable Intelligence</h2>
+        <p class="sec-desc reveal delay-2">9 stages, GPU-accelerated, real-time at 20+ FPS</p>
+
+        <div class="reveal delay-3">
+          <div class="pipeline-flow" id="pipeline-flow"></div>
+        </div>
+
+        <div class="card reveal delay-4" id="pipeline-detail" style="margin-top:20px;display:none;">
+          <div class="card-header">
+            <span id="pipeline-detail-icon">🎯</span>
+            <span id="pipeline-detail-title">Select a stage above</span>
+          </div>
+          <div class="card-body" id="pipeline-detail-body" style="color:var(--text-secondary);line-height:1.7;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Section: Algorithm -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="view-section" id="sec-algorithm" data-section="algorithm">
+      <div class="view-inner">
+        <div class="reveal"><div class="sec-label">Core Algorithm</div></div>
+        <h2 class="sec-title reveal delay-1">Directional Field Convolution</h2>
+        <p class="sec-desc reveal delay-2">O(G²) grid convolution replaces O(N²) pairwise geometry — patent-pending</p>
+
+        <div class="grid grid-2">
+          <div>
+            <div class="algo-steps reveal delay-3" id="algo-steps"></div>
+          </div>
+          <div class="reveal delay-3">
+            <div class="card" style="height:100%;min-height:420px;">
+              <div class="card-header">🔬 Live Visualization</div>
+              <div class="card-body" style="display:flex;align-items:center;justify-content:center;min-height:370px;padding:8px;">
+                <canvas id="algo-canvas" width="360" height="360" style="border-radius:8px;background:var(--bg-canvas);max-width:100%;"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="card reveal delay-4" style="margin-top:18px;">
+          <div class="card-header">📊 Algorithm Comparison</div>
+          <div class="card-body" style="padding:0;overflow-x:auto;">
+            <table class="compare-table">
+              <thead><tr><th>Dimension</th><th>Traditional Pairwise</th><th>Directional Field Convolution</th></tr></thead>
+              <tbody>
+                <tr><td>Complexity</td><td>O(N²)</td><td class="winner">O(G²) — constant</td></tr>
+                <tr><td>GPU</td><td>Difficult</td><td class="winner">Native (cv2.filter2D)</td></tr>
+                <tr><td>Conflict Pairs</td><td>N(N−1)/2 dynamic</td><td class="winner">24 pairs — fixed</td></tr>
+                <tr><td>Ablation</td><td>Full recompute</td><td class="winner">O(1) single-bin</td></tr>
+                <tr><td>Direction</td><td>Per-vector angle</td><td class="highlight">12-bin soft assignment</td></tr>
+                <tr><td>Kernel</td><td>—</td><td class="highlight">Anisotropic Gaussian (7m×1.4m)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Phi Formula -->
+        <div class="card reveal delay-5" style="margin-top:18px;">
+          <div class="card-header">📐 Congestion Index</div>
+          <div class="card-body">
+            <div style="text-align:center;font-family:var(--font-mono);font-size:1.15rem;font-weight:600;padding:16px;background:var(--bg-canvas);border-radius:var(--radius);">
+              Φ = w<sub>ρ</sub> · min(1, N/N<sub>sat</sub>) + w<sub>v</sub> · max(0, 1 − v<sub>avg</sub>/v<sub>ref</sub>)
+            </div>
+            <div class="phi-levels" style="margin-top:18px;">
+              <div class="phi-level" style="background:rgba(107,175,107,0.06);border-color:rgba(107,175,107,0.18);">
+                <div class="level-dot" style="background:#6baf6b;"></div>
+                <div class="level-name">Free Flow</div><div class="level-range">Φ 0.00 – 0.30</div>
+              </div>
+              <div class="phi-level" style="background:rgba(226,185,111,0.06);border-color:rgba(226,185,111,0.18);">
+                <div class="level-dot" style="background:#e2b96f;"></div>
+                <div class="level-name">Moderate</div><div class="level-range">Φ 0.30 – 0.55</div>
+              </div>
+              <div class="phi-level" style="background:rgba(212,149,107,0.06);border-color:rgba(212,149,107,0.18);">
+                <div class="level-dot" style="background:#d4956b;"></div>
+                <div class="level-name">Heavy</div><div class="level-range">Φ 0.55 – 0.75</div>
+              </div>
+              <div class="phi-level" style="background:rgba(213,91,91,0.06);border-color:rgba(213,91,91,0.18);">
+                <div class="level-dot" style="background:#d55b5b;"></div>
+                <div class="level-name">Severe</div><div class="level-range">Φ 0.75 – 1.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Section: Launcher -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="view-section" id="sec-launcher" data-section="launcher">
+      <div class="view-inner">
+        <div class="reveal"><div class="sec-label">Launch Pipeline</div></div>
+        <h2 class="sec-title reveal delay-1">Configure & Run</h2>
+        <p class="sec-desc reveal delay-2">Select intersection, video, and parameters — then launch the full analysis pipeline</p>
+
+        <!-- Step 1: Sites -->
+        <div class="card reveal delay-2" style="margin-bottom:16px;">
+          <div class="card-header">📍 Step 1 — Select Intersection</div>
+          <div class="card-body">
+            <div class="grid grid-3" id="site-grid"></div>
+          </div>
+        </div>
+
+        <!-- Step 2: Video + Config -->
+        <div class="grid grid-2" style="margin-bottom:16px;">
+          <div class="card reveal delay-3">
+            <div class="card-header">🎬 Step 2 — Select Video</div>
+            <div class="card-body">
+              <div class="video-list" id="video-list">
+                <div style="color:var(--text-dim);padding:20px;text-align:center;">← Select an intersection first</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card reveal delay-3">
+            <div class="card-header">⚙️ Step 3 — Configuration</div>
+            <div class="card-body">
+              <div class="preset-chips" id="preset-chips"></div>
+              <div class="control-row" style="margin-top:18px;">
+                <div class="control-group">
+                  <label>Model</label>
+                  <select id="model-select"><option>Loading...</option></select>
+                </div>
+                <div class="control-group">
+                  <label>Stride</label>
+                  <select id="stride-select">
+                    <option value="1">1 (all frames)</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3 (balanced)</option>
+                    <option value="5">5</option>
+                    <option value="8">8 (fast)</option>
+                  </select>
+                </div>
+                <div class="control-group">
+                  <label>Max Frames</label>
+                  <input type="number" id="max-frames" value="0" min="0" step="60" placeholder="0=all" style="width:100px;">
+                </div>
+                <div class="control-group">
+                  <label>Windows</label>
+                  <select id="show-windows">
+                    <option value="1" selected>Show</option>
+                    <option value="0">Headless</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Launch -->
+        <div class="reveal delay-4" style="text-align:center;">
+          <button class="btn btn-accent btn-lg" id="launch-btn" style="min-width:260px;">▶ Launch Pipeline</button>
+          <button class="btn btn-secondary btn-lg" id="stop-btn" style="display:none;min-width:260px;">⏹ Stop Pipeline</button>
+          <div id="launch-status" style="margin-top:10px;font-size:0.88rem;color:var(--text-dim);"></div>
+          <div class="log-console" id="log-console"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Section: Monitor -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="view-section" id="sec-monitor" data-section="monitor">
+      <div class="view-inner">
+        <div class="reveal"><div class="sec-label">Live Monitor</div></div>
+        <h2 class="sec-title reveal delay-1">Real-Time Analysis Dashboard</h2>
+        <p class="sec-desc reveal delay-2">Live Phi metrics, composite output feed, and timeline</p>
+
+        <div class="status-bar reveal delay-2" id="monitor-status">
+          <div class="status-pill idle">
+            <span class="status-dot-sm idle"></span>
+            <span id="monitor-status-text">No pipeline running</span>
+          </div>
+          <span style="color:var(--text-dim);font-size:0.82rem;" id="monitor-info"></span>
+        </div>
+
+        <div class="metrics-row reveal delay-2">
+          <div class="metric-tile">
+            <div class="metric-value" id="metric-phi" style="color:#6baf6b;">0.0000</div>
+            <div class="metric-label">Phi Index</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value" id="metric-vehicles">0</div>
+            <div class="metric-label">Vehicles</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value" id="metric-speed">0.00</div>
+            <div class="metric-label">Avg Speed (m/s)</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value" id="metric-parked">0</div>
+            <div class="metric-label">Parked</div>
+          </div>
+        </div>
+
+        <div class="grid grid-2 reveal delay-3" style="margin-top:18px;">
+          <div class="card">
+            <div class="card-header">🖼️ Live Composite Output</div>
+            <div class="card-body" style="padding:0;">
+              <div class="live-preview" id="live-preview">
+                <div class="live-placeholder">
+                  <div class="ph-icon">📡</div>
+                  <div>Waiting for pipeline output...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">📈 Phi Timeline</div>
+            <div class="card-body" style="padding:0;">
+              <div class="chart-container" id="chart-container">
+                <canvas id="phi-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card reveal delay-4" style="margin-top:18px;">
+          <div class="card-header">📋 Detected Events</div>
+          <div class="card-body" id="events-list">
+            <div style="color:var(--text-dim);text-align:center;padding:14px;">No events yet.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Section: Architecture -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="view-section" id="sec-architecture" data-section="architecture">
+      <div class="view-inner">
+        <div class="reveal"><div class="sec-label">System Architecture</div></div>
+        <h2 class="sec-title reveal delay-1">Modular Design</h2>
+        <p class="sec-desc reveal delay-2">4-layer architecture: Application → Pipeline → Core/Analysis/Visual → OpenCV/PyTorch</p>
+
+        <div class="grid grid-4">
+          <div class="card reveal delay-2">
+            <div class="card-header">🎯 Core</div>
+            <div class="card-body" style="font-size:0.84rem;line-height:1.9;color:var(--text-secondary);">
+              • Detection & Tracking<br>
+              • BEV Transform<br>
+              • Conflict Analysis<br>
+              • Memory Recovery<br>
+              • Motion Analysis<br>
+              • Phi Index
+            </div>
+          </div>
+          <div class="card reveal delay-3">
+            <div class="card-header">🔬 Analysis</div>
+            <div class="card-body" style="font-size:0.84rem;line-height:1.9;color:var(--text-secondary);">
+              • Attribution<br>
+              • Ablation Study<br>
+              • Root Cause<br>
+              • Water Drop<br>
+              • Kernel Analysis
+            </div>
+          </div>
+          <div class="card reveal delay-4">
+            <div class="card-header">🎨 Visualization</div>
+            <div class="card-body" style="font-size:0.84rem;line-height:1.9;color:var(--text-secondary);">
+              • Data Panel<br>
+              • Phi Timeline<br>
+              • BEV Overlay<br>
+              • Glow Effects<br>
+              • Heatmaps
+            </div>
+          </div>
+          <div class="card reveal delay-5">
+            <div class="card-header">🛠️ Tools</div>
+            <div class="card-body" style="font-size:0.84rem;line-height:1.9;color:var(--text-secondary);">
+              • Calibration<br>
+              • Benchmark<br>
+              • Theme System<br>
+              • Async Writer<br>
+              • 5 Site Configs
+            </div>
+          </div>
+        </div>
+
+        <footer class="footer reveal delay-6" style="margin-top:40px;">
+          <p>Visual Recognition Intersection Information Collection System</p>
+          <p style="margin-top:2px;">Directional Field Convolution · YOLO11 + ByteTrack · Real-time GPU Pipeline</p>
+          <p style="margin-top:10px;font-size:0.7rem;">© 2025–2026</p>
+        </footer>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Scripts -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<script src="/static/js/particles.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

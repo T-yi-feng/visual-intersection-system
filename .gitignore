@@ -51,3 +51,4 @@ cookies_bilibili.txt
 
 # Jupyter
 .ipynb_checkpoints/
+.gstack/

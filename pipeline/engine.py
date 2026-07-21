@@ -353,7 +353,7 @@ class PipelineEngine:
                     all_pts[2 * vi + 1] = (px2, py2)
                     vi += 1
 
-                meta['heading_deg'] = 0  # 默认值，批量投影后更新
+                meta['heading_deg'] = meta.get('heading_deg', 0)  # 记忆恢复的 heading 优先
                 meta['bev_raw_x'] = bev_raw_x
                 meta['bev_raw_y'] = bev_raw_y
                 current_meta[tid] = meta
@@ -605,19 +605,20 @@ class PipelineEngine:
                     conflict_analyzer.grid_cfg,
                 )
                 root_cause_pct = root_cause_to_pct(root_cause_scores)
-                # 标记根因最高的 Top-2 车辆
+                # 红色 = 根因 Top-2 + 冲突参与 > 10%（必须同时满足）
                 rc_indices = np.argsort(root_cause_scores)[::-1]
                 for rank in range(min(2, len(rc_indices))):
                     idx = rc_indices[rank]
-                    if root_cause_scores[idx] > root_cause_scores.min():
-                        tid = conflict_result.vehicles[idx].get('track_id', idx)
+                    tid = conflict_result.vehicles[idx].get('track_id', idx)
+                    inf_pct = (influences[idx] / max(max(influences), 1e-8)) * 100.0
+                    if root_cause_scores[idx] > root_cause_scores.min() and inf_pct > 10.0:
                         tid_to_rc[tid] = root_cause_pct[idx] if idx < len(root_cause_pct) else 0
                         root_cause_tids.add(tid)
                 if frame_index % 20 == 0:
                     ranked = conflict_result.get_vehicles_ranked_by_influence()
                     n_red = len(root_cause_tids)
                     max_rc = max(root_cause_pct) if len(root_cause_pct) > 0 else 0
-                    print(f"  [ROOT CAUSE] n_red={n_red} max_cause={max_rc:.1f}% tids={sorted(root_cause_tids)[:5]}")
+                    print(f"  [ROOT CAUSE] n_red={n_red} (Top-2 RC + Inf>10%) max_cause={max_rc:.1f}%")
                     for ri in range(min(3, len(ranked))):
                         idx, iv, v = ranked[ri]
                         inf_pct = (iv / max(max(influences), 1e-8)) * 100.0

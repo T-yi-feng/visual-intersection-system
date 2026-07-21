@@ -2,6 +2,7 @@
 Visual Traffic Analysis — Unified Launcher
 
 双击此文件或执行:
+    E:\Anaconda\python.exe
     python launch.py
 
 自动启动 Streamlit 智能控制台，提供:

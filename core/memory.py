@@ -265,6 +265,10 @@ class MemoryBank:
                 # 匹配成功 → 恢复 ID
                 if best_tid is not None and best_score >= self.match_threshold:
                     old_tid = v['track_id']
+                    # 恢复 heading（遮挡前的方向）
+                    mem = self.memories.get(best_tid)
+                    if mem is not None:
+                        v['heading_deg'] = mem.heading
                     v['track_id'] = best_tid
                     # 删除旧的记忆条目
                     self.memories.pop(best_tid, None)
